@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notenschlüssel-Rechner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #2c5282;
+        }
+
+        .container {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="number"],
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #3182ce;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .error {
+            color: #e53e3e;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .success {
+            color: #38a169;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Notenschlüssel-Rechner</h1>
+
+    <div class="container">
+        <h2>Eingabe</h2>
+
+        {{if .ErrorMessage}}
+        <p class="error">{{.ErrorMessage}}</p>
+        {{end}}
+
+        <form action="/" method="post" enctype="multipart/form-data">
+            <div>
+                <label for="maxPoints">Maximale Punktzahl:</label>
+                <input type="number" id="maxPoints" name="maxPoints" value="{{.MaxPoints}}" required>
+            </div>
+
+            <div>
+                <label for="minPoints">Minimale Punktevergabe:</label>
+                <input type="number" id="minPoints" name="minPoints" step="0.1" value="{{.MinPoints}}" required>
+            </div>
+
+            <div>
+                <label for="breakPointPercent">Knickpunkt in % (z.B. 50):</label>
+                <input type="number" id="breakPointPercent" name="breakPointPercent" min="0" max="100"
+                    value="{{.BreakPointPercent}}" required>
+            </div>
+
+            <div>
+                <label for="csvFile">CSV-Datei mit Schülerpunkten (optional):</label>
+                <input type="file" id="csvFile" name="csvFile" accept=".csv">
+                <small>Format: Eine Spalte für Namen, eine Spalte für Punkte</small>
+            </div>
+
+            <button type="submit">Berechnen</button>
+        </form>
+    </div>
+
+    {{if .HasResults}}
+    <div class="container">
+        <h2>Notenschlüssel</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Note</th>
+                    <th>Punktebereich</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .GradeBounds}}
+                <tr>
+                    <td>{{.Grade}}</td>
+                    <td>{{printf "%.1f" .LowerBound}} - {{printf "%.1f" .UpperBound}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+
+    {{if .HasStudents}}
+    <div class="container">
+        <h2>Schülerergebnisse</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Punkte</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Students}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td>{{printf "%.1f" .Points}}</td>
+                    <td>{{.Grade}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+
+        <h3>Notendurchschnitt: {{printf "%.2f" .AverageGrade}}</h3>
+    </div>
+    {{end}}
+
+</body>
+
+</html>
