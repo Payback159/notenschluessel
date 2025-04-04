@@ -70,6 +70,7 @@ func main() {
 	// Add new download handlers
 	http.HandleFunc("/download/grade-scale", handleGradeScaleDownload)
 	http.HandleFunc("/download/student-results", handleStudentResultsDownload)
+	http.HandleFunc("/download/combined", handleCombinedDownload) // Add this new handler
 
 	// Start server
 	fmt.Println("Server läuft auf http://localhost:8080")
@@ -301,6 +302,59 @@ func handleStudentResultsDownload(w http.ResponseWriter, r *http.Request) {
 	// Set headers for file download
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.csv")
+
+	// Write content to response
+	w.Write(buffer.Bytes())
+}
+
+// Handler for combined download of grade scale and student results
+func handleCombinedDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasResults {
+		http.Error(w, "Keine Daten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Generate combined CSV content
+	var buffer bytes.Buffer
+
+	// Add grade scale section
+	buffer.WriteString("NOTENSCHLÜSSEL\n")
+	buffer.WriteString("Note,Punktebereich von,Punktebereich bis\n")
+
+	for _, bound := range data.GradeBounds {
+		line := fmt.Sprintf("%d,%.1f,%.1f\n", bound.Grade, bound.LowerBound, bound.UpperBound)
+		buffer.WriteString(line)
+	}
+
+	// Add empty line as separator between sections
+	buffer.WriteString("\n")
+
+	// Add student results section if available
+	if data.HasStudents {
+		buffer.WriteString("SCHÜLERERGEBNISSE\n")
+		buffer.WriteString("Name,Punkte,Note\n")
+
+		for _, student := range data.Students {
+			// Escape names that might contain commas
+			escapedName := student.Name
+			if strings.Contains(escapedName, ",") {
+				escapedName = fmt.Sprintf("\"%s\"", escapedName)
+			}
+
+			line := fmt.Sprintf("%s,%.1f,%d\n", escapedName, student.Points, student.Grade)
+			buffer.WriteString(line)
+		}
+
+		// Add average at the end
+		buffer.WriteString(fmt.Sprintf("Durchschnitt,,%.2f\n", data.AverageGrade))
+	}
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel_und_ergebnisse.csv")
 
 	// Write content to response
 	w.Write(buffer.Bytes())
