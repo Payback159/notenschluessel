@@ -207,6 +207,11 @@
         <div class="buttons-container">
             <a href="/download/grade-scale?id={{.SessionID}}" class="download-btn">Notenschlüssel als CSV
                 herunterladen</a>
+
+            {{if .HasStudents}}
+            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Notenschlüssel und Ergebnisse als CSV
+                herunterladen</a>
+            {{end}}
         </div>
     </div>
     {{end}}
@@ -237,6 +242,8 @@
 
         <div class="buttons-container">
             <a href="/download/student-results?id={{.SessionID}}" class="download-btn">Schülerergebnisse als CSV
+                herunterladen</a>
+            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Notenschlüssel und Ergebnisse als CSV
                 herunterladen</a>
         </div>
     </div>
