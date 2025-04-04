@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"html/template"
@@ -9,7 +10,10 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type Student struct {
@@ -29,6 +33,7 @@ type PageData struct {
 	HasStudents        bool
 	CalculationSuccess bool
 	ErrorMessage       string
+	SessionID          string
 }
 
 type GradeBound struct {
@@ -36,6 +41,9 @@ type GradeBound struct {
 	LowerBound float64
 	UpperBound float64
 }
+
+// Session storage to keep track of calculation results
+var sessionResults = make(map[string]PageData)
 
 func main() {
 	// Load templates
@@ -58,6 +66,10 @@ func main() {
 			return
 		}
 	})
+
+	// Add new download handlers
+	http.HandleFunc("/download/grade-scale", handleGradeScaleDownload)
+	http.HandleFunc("/download/student-results", handleStudentResultsDownload)
 
 	// Start server
 	fmt.Println("Server läuft auf http://localhost:8080")
@@ -113,16 +125,17 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	// Calculate breaking point in points
 	breakPointPercent = math.Max(0, math.Min(100, breakPointPercent))
-	breakPointPoints := minPoints + float64(maxPoints-int(minPoints))*(breakPointPercent/100)
+	breakPointPoints := float64(maxPoints) * (breakPointPercent / 100)
 
 	// Round the breaking point to the nearest multiple of minPoints
 	if minPoints > 0 {
-		breakPointPoints = math.Round(breakPointPoints/minPoints) * minPoints
+		// Round down to ensure the boundary is inclusive for grade 4
+		breakPointPoints = math.Floor(breakPointPoints/minPoints) * minPoints
 	}
 
 	// Ensure breaking point is within valid range
-	if breakPointPoints <= minPoints {
-		breakPointPoints = minPoints + minPoints
+	if breakPointPoints < minPoints {
+		breakPointPoints = minPoints
 	}
 	if breakPointPoints >= float64(maxPoints) {
 		breakPointPoints = float64(maxPoints) - minPoints
@@ -139,7 +152,7 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 	lowerBound2 := roundToStepSize(breakPointPoints+2*pointsPerGrade, minPoints)
 	lowerBound3 := roundToStepSize(breakPointPoints+pointsPerGrade, minPoints)
 	lowerBound4 := breakPointPoints
-	lowerBound5 := minPoints
+	lowerBound5 := 0.0 // Set to 0 as the absolute minimum for grade 5
 
 	// Calculate the upper bound of each grade
 	upperBound1 := float64(maxPoints)
@@ -199,6 +212,11 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 			gradeSum += float64(students[i].Grade)
 		}
 
+		// Sort students alphabetically by name
+		sort.Slice(students, func(i, j int) bool {
+			return students[i].Name < students[j].Name
+		})
+
 		pageData.Students = students
 		pageData.HasStudents = len(students) > 0
 
@@ -209,8 +227,83 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		pageData.ErrorMessage = fmt.Sprintf("CSV-Datei '%s' erfolgreich geladen", handler.Filename)
 	}
 
+	// Store results in session for later download
+	sessionID := generateSessionID()
+	sessionResults[sessionID] = pageData
+
+	// Add session ID to the template data
+	pageData.SessionID = sessionID
+
 	// Render template with results
 	templates.ExecuteTemplate(w, "index.html", pageData)
+}
+
+// Function to generate a simple session ID
+func generateSessionID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// Handler for grade scale download
+func handleGradeScaleDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasResults {
+		http.Error(w, "Keine Daten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Generate CSV content
+	var buffer bytes.Buffer
+	buffer.WriteString("Note,Punktebereich von,Punktebereich bis\n")
+
+	for _, bound := range data.GradeBounds {
+		line := fmt.Sprintf("%d,%.1f,%.1f\n", bound.Grade, bound.LowerBound, bound.UpperBound)
+		buffer.WriteString(line)
+	}
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel.csv")
+
+	// Write content to response
+	w.Write(buffer.Bytes())
+}
+
+// Handler for student results download
+func handleStudentResultsDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasStudents {
+		http.Error(w, "Keine Schülerdaten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Generate CSV content
+	var buffer bytes.Buffer
+	buffer.WriteString("Name,Punkte,Note\n")
+
+	for _, student := range data.Students {
+		// Escape names that might contain commas
+		escapedName := student.Name
+		if strings.Contains(escapedName, ",") {
+			escapedName = fmt.Sprintf("\"%s\"", escapedName)
+		}
+
+		line := fmt.Sprintf("%s,%.1f,%d\n", escapedName, student.Points, student.Grade)
+		buffer.WriteString(line)
+	}
+
+	// Add average at the end
+	buffer.WriteString(fmt.Sprintf("Durchschnitt,,%.2f\n", data.AverageGrade))
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.csv")
+
+	// Write content to response
+	w.Write(buffer.Bytes())
 }
 
 // Function to round a value to the nearest multiple of step size
