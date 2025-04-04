@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/xuri/excelize/v2"
 )
 
 type Student struct {
@@ -67,10 +69,15 @@ func main() {
 		}
 	})
 
-	// Add new download handlers
+	// Add download handlers
 	http.HandleFunc("/download/grade-scale", handleGradeScaleDownload)
 	http.HandleFunc("/download/student-results", handleStudentResultsDownload)
-	http.HandleFunc("/download/combined", handleCombinedDownload) // Add this new handler
+	http.HandleFunc("/download/combined", handleCombinedDownload)
+
+	// Add Excel download handlers
+	http.HandleFunc("/download/grade-scale-excel", handleGradeScaleExcelDownload)
+	http.HandleFunc("/download/student-results-excel", handleStudentResultsExcelDownload)
+	http.HandleFunc("/download/combined-excel", handleCombinedExcelDownload)
 
 	// Start server
 	fmt.Println("Server läuft auf http://localhost:8080")
@@ -358,6 +365,176 @@ func handleCombinedDownload(w http.ResponseWriter, r *http.Request) {
 
 	// Write content to response
 	w.Write(buffer.Bytes())
+}
+
+// Handler for grade scale Excel download
+func handleGradeScaleExcelDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasResults {
+		http.Error(w, "Keine Daten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	// Create a new sheet
+	sheetName := "Notenschlüssel"
+	f.NewSheet(sheetName)
+	f.DeleteSheet("Sheet1") // Remove default sheet
+
+	// Add headers
+	f.SetCellValue(sheetName, "A1", "Note")
+	f.SetCellValue(sheetName, "B1", "Punktebereich von")
+	f.SetCellValue(sheetName, "C1", "Punktebereich bis")
+
+	// Add data
+	for i, bound := range data.GradeBounds {
+		row := i + 2 // Start from row 2 (after headers)
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), bound.Grade)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+	}
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel.xlsx")
+
+	// Write the file to response
+	if err := f.Write(w); err != nil {
+		http.Error(w, "Fehler beim Erstellen der Excel-Datei", http.StatusInternalServerError)
+		return
+	}
+}
+
+// Handler for student results Excel download
+func handleStudentResultsExcelDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasStudents {
+		http.Error(w, "Keine Schülerdaten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	// Create a new sheet
+	sheetName := "Schülerergebnisse"
+	f.NewSheet(sheetName)
+	f.DeleteSheet("Sheet1") // Remove default sheet
+
+	// Add headers
+	f.SetCellValue(sheetName, "A1", "Name")
+	f.SetCellValue(sheetName, "B1", "Punkte")
+	f.SetCellValue(sheetName, "C1", "Note")
+
+	// Add data
+	for i, student := range data.Students {
+		row := i + 2 // Start from row 2 (after headers)
+		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), student.Name)
+		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), student.Points)
+		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), student.Grade)
+	}
+
+	// Add average at the bottom
+	lastRow := len(data.Students) + 2
+	f.SetCellValue(sheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt")
+	f.SetCellValue(sheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade)
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.xlsx")
+
+	// Write the file to response
+	if err := f.Write(w); err != nil {
+		http.Error(w, "Fehler beim Erstellen der Excel-Datei", http.StatusInternalServerError)
+		return
+	}
+}
+
+// Handler for combined Excel download
+func handleCombinedExcelDownload(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.URL.Query().Get("id")
+	data, exists := sessionResults[sessionID]
+
+	if !exists || !data.HasResults {
+		http.Error(w, "Keine Daten zum Herunterladen verfügbar", http.StatusBadRequest)
+		return
+	}
+
+	// Create a new Excel file
+	f := excelize.NewFile()
+	defer func() {
+		if err := f.Close(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+
+	// Create grade scale sheet
+	gradeSheetName := "Notenschlüssel"
+	f.NewSheet(gradeSheetName)
+	f.DeleteSheet("Sheet1") // Remove default sheet
+
+	// Add headers to grade scale sheet
+	f.SetCellValue(gradeSheetName, "A1", "Note")
+	f.SetCellValue(gradeSheetName, "B1", "Punktebereich von")
+	f.SetCellValue(gradeSheetName, "C1", "Punktebereich bis")
+
+	// Add grade data
+	for i, bound := range data.GradeBounds {
+		row := i + 2 // Start from row 2 (after headers)
+		f.SetCellValue(gradeSheetName, fmt.Sprintf("A%d", row), bound.Grade)
+		f.SetCellValue(gradeSheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
+		f.SetCellValue(gradeSheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+	}
+
+	// Create student results sheet if data is available
+	if data.HasStudents {
+		studentSheetName := "Schülerergebnisse"
+		f.NewSheet(studentSheetName)
+
+		// Add headers to student results sheet
+		f.SetCellValue(studentSheetName, "A1", "Name")
+		f.SetCellValue(studentSheetName, "B1", "Punkte")
+		f.SetCellValue(studentSheetName, "C1", "Note")
+
+		// Add student data
+		for i, student := range data.Students {
+			row := i + 2 // Start from row 2 (after headers)
+			f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", row), student.Name)
+			f.SetCellValue(studentSheetName, fmt.Sprintf("B%d", row), student.Points)
+			f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", row), student.Grade)
+		}
+
+		// Add average at the bottom
+		lastRow := len(data.Students) + 2
+		f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt")
+		f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade)
+	}
+
+	// Set headers for file download
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel_und_ergebnisse.xlsx")
+
+	// Write the file to response
+	if err := f.Write(w); err != nil {
+		http.Error(w, "Fehler beim Erstellen der Excel-Datei", http.StatusInternalServerError)
+		return
+	}
 }
 
 // Function to round a value to the nearest multiple of step size
