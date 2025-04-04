@@ -96,6 +96,52 @@
             margin-bottom: 10px;
             font-weight: bold;
         }
+
+        .download-btn {
+            background-color: #38a169;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .download-btn:hover {
+            background-color: #2f855a;
+        }
+
+        .buttons-container {
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        /* Grade-specific colors for student results - make these more specific */
+        tbody tr.grade-1 {
+            background-color: #c6f6d5 !important;
+            /* Light green with !important */
+        }
+
+        tbody tr.grade-2 {
+            background-color: #d4edda !important;
+            /* Pale green with !important */
+        }
+
+        tbody tr.grade-3 {
+            background-color: #fff3cd !important;
+            /* Light yellow with !important */
+        }
+
+        tbody tr.grade-4 {
+            background-color: #ffe8cc !important;
+            /* Light orange with !important */
+        }
+
+        tbody tr.grade-5 {
+            background-color: #f8d7da !important;
+            /* Light red with !important */
+        }
     </style>
 </head>
 
@@ -112,18 +158,20 @@
         <form action="/" method="post" enctype="multipart/form-data">
             <div>
                 <label for="maxPoints">Maximale Punktzahl:</label>
-                <input type="number" id="maxPoints" name="maxPoints" value="{{.MaxPoints}}" required>
+                <input type="number" id="maxPoints" name="maxPoints" value="{{if .MaxPoints}}{{.MaxPoints}}{{end}}"
+                    required>
             </div>
 
             <div>
                 <label for="minPoints">Minimale Punktevergabe:</label>
-                <input type="number" id="minPoints" name="minPoints" step="0.1" value="{{.MinPoints}}" required>
+                <input type="number" id="minPoints" name="minPoints" step="0.1"
+                    value="{{if .MinPoints}}{{.MinPoints}}{{else}}0.5{{end}}" required>
             </div>
 
             <div>
                 <label for="breakPointPercent">Knickpunkt in % (z.B. 50):</label>
                 <input type="number" id="breakPointPercent" name="breakPointPercent" min="0" max="100"
-                    value="{{.BreakPointPercent}}" required>
+                    value="{{if .BreakPointPercent}}{{.BreakPointPercent}}{{else}}50{{end}}" required>
             </div>
 
             <div>
@@ -148,13 +196,18 @@
             </thead>
             <tbody>
                 {{range .GradeBounds}}
-                <tr>
+                <tr class="grade-{{.Grade}}">
                     <td>{{.Grade}}</td>
                     <td>{{printf "%.1f" .LowerBound}} - {{printf "%.1f" .UpperBound}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
+
+        <div class="buttons-container">
+            <a href="/download/grade-scale?id={{.SessionID}}" class="download-btn">Notenschlüssel als CSV
+                herunterladen</a>
+        </div>
     </div>
     {{end}}
 
@@ -171,7 +224,7 @@
             </thead>
             <tbody>
                 {{range .Students}}
-                <tr>
+                <tr class="grade-{{.Grade}}">
                     <td>{{.Name}}</td>
                     <td>{{printf "%.1f" .Points}}</td>
                     <td>{{.Grade}}</td>
@@ -181,6 +234,11 @@
         </table>
 
         <h3>Notendurchschnitt: {{printf "%.2f" .AverageGrade}}</h3>
+
+        <div class="buttons-container">
+            <a href="/download/student-results?id={{.SessionID}}" class="download-btn">Schülerergebnisse als CSV
+                herunterladen</a>
+        </div>
     </div>
     {{end}}
 
