@@ -214,15 +214,14 @@
         </table>
 
         <div class="buttons-container">
-            <a href="/download/grade-scale?id={{.SessionID}}" class="download-btn">Notenschlüssel als CSV</a>
-            <a href="/download/grade-scale-excel?id={{.SessionID}}" class="download-btn excel-btn">Notenschlüssel als
-                Excel</a>
-
             {{if .HasStudents}}
-            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Notenschlüssel und Ergebnisse als
-                CSV</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Notenschlüssel und
-                Ergebnisse als Excel</a>
+            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
+            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
+                herunterladen</a>
+            {{else}}
+            <a href="/download/grade-scale?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
+            <a href="/download/grade-scale-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
+                herunterladen</a>
             {{end}}
         </div>
     </div>
@@ -253,13 +252,9 @@
         <h3>Notendurchschnitt: {{printf "%.2f" .AverageGrade}}</h3>
 
         <div class="buttons-container">
-            <a href="/download/student-results?id={{.SessionID}}" class="download-btn">Schülerergebnisse als CSV</a>
-            <a href="/download/student-results-excel?id={{.SessionID}}" class="download-btn excel-btn">Schülerergebnisse
-                als Excel</a>
-            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Notenschlüssel und Ergebnisse als
-                CSV</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Notenschlüssel und
-                Ergebnisse als Excel</a>
+            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
+            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
+                herunterladen</a>
         </div>
     </div>
     {{end}}
