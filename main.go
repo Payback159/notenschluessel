@@ -395,12 +395,88 @@ func handleGradeScaleExcelDownload(w http.ResponseWriter, r *http.Request) {
 	f.SetCellValue(sheetName, "B1", "Punktebereich von")
 	f.SetCellValue(sheetName, "C1", "Punktebereich bis")
 
-	// Add data
+	// Style for headers
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f2f2f2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	f.SetCellStyle(sheetName, "A1", "C1", headerStyle)
+
+	// Define cell styles for each grade
+	gradeStyles := make(map[int]int)
+
+	style1, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#c6f6d5"}, Pattern: 1}, // Light green
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[1] = style1
+
+	style2, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#d4edda"}, Pattern: 1}, // Pale green
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[2] = style2
+
+	style3, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#fff3cd"}, Pattern: 1}, // Light yellow
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[3] = style3
+
+	style4, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#ffe8cc"}, Pattern: 1}, // Light orange
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[4] = style4
+
+	style5, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f8d7da"}, Pattern: 1}, // Light red
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[5] = style5
+
+	// Add data with styling
 	for i, bound := range data.GradeBounds {
 		row := i + 2 // Start from row 2 (after headers)
 		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), bound.Grade)
 		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
 		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+
+		// Apply the style based on grade
+		if style, exists := gradeStyles[bound.Grade]; exists {
+			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style)
+		}
 	}
 
 	// Set headers for file download
@@ -484,6 +560,76 @@ func handleCombinedExcelDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Define cell styles for each grade
+	gradeStyles := make(map[int]int)
+
+	style1, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#c6f6d5"}, Pattern: 1}, // Light green
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[1] = style1
+
+	style2, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#d4edda"}, Pattern: 1}, // Pale green
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[2] = style2
+
+	style3, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#fff3cd"}, Pattern: 1}, // Light yellow
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[3] = style3
+
+	style4, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#ffe8cc"}, Pattern: 1}, // Light orange
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[4] = style4
+
+	style5, _ := f.NewStyle(&excelize.Style{
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f8d7da"}, Pattern: 1}, // Light red
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+	gradeStyles[5] = style5
+
+	// Style for headers
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f2f2f2"}, Pattern: 1},
+		Border: []excelize.Border{
+			{Type: "left", Color: "#000000", Style: 1},
+			{Type: "top", Color: "#000000", Style: 1},
+			{Type: "right", Color: "#000000", Style: 1},
+			{Type: "bottom", Color: "#000000", Style: 1},
+		},
+	})
+
 	// Create grade scale sheet
 	gradeSheetName := "Notenschlüssel"
 	f.NewSheet(gradeSheetName)
@@ -493,13 +639,19 @@ func handleCombinedExcelDownload(w http.ResponseWriter, r *http.Request) {
 	f.SetCellValue(gradeSheetName, "A1", "Note")
 	f.SetCellValue(gradeSheetName, "B1", "Punktebereich von")
 	f.SetCellValue(gradeSheetName, "C1", "Punktebereich bis")
+	f.SetCellStyle(gradeSheetName, "A1", "C1", headerStyle)
 
-	// Add grade data
+	// Add grade data with styling
 	for i, bound := range data.GradeBounds {
 		row := i + 2 // Start from row 2 (after headers)
 		f.SetCellValue(gradeSheetName, fmt.Sprintf("A%d", row), bound.Grade)
 		f.SetCellValue(gradeSheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
 		f.SetCellValue(gradeSheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+
+		// Apply the style based on grade
+		if style, exists := gradeStyles[bound.Grade]; exists {
+			f.SetCellStyle(gradeSheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style)
+		}
 	}
 
 	// Create student results sheet if data is available
@@ -511,19 +663,34 @@ func handleCombinedExcelDownload(w http.ResponseWriter, r *http.Request) {
 		f.SetCellValue(studentSheetName, "A1", "Name")
 		f.SetCellValue(studentSheetName, "B1", "Punkte")
 		f.SetCellValue(studentSheetName, "C1", "Note")
+		f.SetCellStyle(studentSheetName, "A1", "C1", headerStyle)
 
-		// Add student data
+		// Add student data with styling
 		for i, student := range data.Students {
 			row := i + 2 // Start from row 2 (after headers)
 			f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", row), student.Name)
 			f.SetCellValue(studentSheetName, fmt.Sprintf("B%d", row), student.Points)
 			f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", row), student.Grade)
+
+			// Apply the style based on grade
+			if style, exists := gradeStyles[student.Grade]; exists {
+				f.SetCellStyle(studentSheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style)
+			}
 		}
 
-		// Add average at the bottom
+		// Add average at the bottom with special formatting
 		lastRow := len(data.Students) + 2
 		f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt")
 		f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade)
+
+		// Create a summary style
+		summaryStyle, _ := f.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Bold: true},
+			Border: []excelize.Border{
+				{Type: "top", Color: "#000000", Style: 1},
+			},
+		})
+		f.SetCellStyle(studentSheetName, fmt.Sprintf("A%d", lastRow), fmt.Sprintf("C%d", lastRow), summaryStyle)
 	}
 
 	// Set headers for file download
