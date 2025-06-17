@@ -52,6 +52,7 @@ type PageData struct {
 	CalculationSuccess bool
 	Message            *Message
 	SessionID          string
+	GitHubConfigured   bool
 }
 
 type GradeBound struct {
@@ -93,6 +94,13 @@ type GitHubClient struct {
 
 // Session storage to keep track of calculation results
 var sessionResults = make(map[string]PageData)
+
+// Check if GitHub is configured
+func isGitHubConfigured() bool {
+	token := os.Getenv("GITHUB_TOKEN")
+	repo := os.Getenv("GITHUB_REPO")
+	return token != "" && repo != ""
+}
 
 // GitHub client for creating issues
 func newGitHubClient() *GitHubClient {
@@ -191,7 +199,9 @@ func main() {
 		}
 
 		if r.Method == http.MethodGet {
-			templates.ExecuteTemplate(w, "index.html", PageData{})
+			templates.ExecuteTemplate(w, "index.html", PageData{
+				GitHubConfigured: isGitHubConfigured(),
+			})
 			return
 		}
 
@@ -227,7 +237,9 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		return
 	}
 
-	pageData := PageData{}
+	pageData := PageData{
+		GitHubConfigured: isGitHubConfigured(),
+	}
 
 	// Get form values
 	maxPointsStr := r.FormValue("maxPoints")
@@ -972,19 +984,19 @@ func handleBugReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create GitHub client and try to create issue
-	gitHubClient := newGitHubClient()
-
-	if !gitHubClient.isConfigured() {
-		// Fallback: Log to console if GitHub is not configured
-		log.Printf("Bug Report (GitHub not configured): %s - %s", bugReport.Title, bugReport.Description)
+	// Check if GitHub is configured
+	if !isGitHubConfigured() {
 		response := BugReportResponse{
-			Success: true,
-			Message: "Bug-Report wurde erfolgreich übermittelt",
+			Success: false,
+			Message: "Bug-Report-Funktion ist nicht verfügbar",
 		}
+		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	// Create GitHub client and try to create issue
+	gitHubClient := newGitHubClient()
 
 	// Try to create GitHub issue
 	err = gitHubClient.createIssue(bugReport)

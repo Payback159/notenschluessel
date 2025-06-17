@@ -6,6 +6,19 @@ services:
     volumes:
       - /tmp:/tmp
     restart: unless-stopped
+    
+    # Optional: Environment variables for GitHub bug reporting
+    # Create a .env file with the following variables to enable bug reports:
+    # GITHUB_TOKEN=ghp_your_personal_access_token_here
+    # GITHUB_REPO=your-username/notenschluessel
+    # env_file:
+    #   - .env
+    
+    # Alternative: Set environment variables directly (not recommended for production)
+    # environment:
+    #   - GITHUB_TOKEN=ghp_your_token_here
+    #   - GITHUB_REPO=your-username/notenschluessel
+    
     # Security options
     security_opt:
       - no-new-privileges:true

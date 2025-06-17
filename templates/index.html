@@ -593,7 +593,8 @@
     </div>
     {{end}}
 
-    <!-- Bug Report Button -->
+    <!-- Bug Report Button - Only show if GitHub is configured -->
+    {{if .GitHubConfigured}}
     <div class="bug-report-container">
         <button class="bug-report-btn" onclick="openBugReportModal()" title="Fehler melden">
             <span class="bug-icon">🐛</span>
@@ -712,6 +713,7 @@
             </div>
         </div>
     </div>
+    {{end}}
 
     <script>
         // Bug Report Modal Functions
