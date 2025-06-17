@@ -24,6 +24,21 @@ type Student struct {
 	Grade  int
 }
 
+// MessageType definiert die erlaubten Nachrichtentypen
+type MessageType string
+
+const (
+	MessageTypeError   MessageType = "error"
+	MessageTypeInfo    MessageType = "info"
+	MessageTypeWarning MessageType = "warning"
+	MessageTypeSuccess MessageType = "success"
+)
+
+type Message struct {
+	Text string
+	Type MessageType
+}
+
 type PageData struct {
 	MaxPoints          int
 	MinPoints          float64
@@ -34,7 +49,7 @@ type PageData struct {
 	HasResults         bool
 	HasStudents        bool
 	CalculationSuccess bool
-	ErrorMessage       string
+	Message            *Message
 	SessionID          string
 }
 
@@ -102,7 +117,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 	// Convert string values to appropriate types
 	maxPoints, err := strconv.Atoi(maxPointsStr)
 	if err != nil {
-		pageData.ErrorMessage = "Ungültige Eingabe für maximale Punktzahl"
+		pageData.Message = &Message{
+			Text: "Ungültige Eingabe für maximale Punktzahl",
+			Type: MessageTypeError,
+		}
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
@@ -110,7 +128,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	minPoints, err := strconv.ParseFloat(minPointsStr, 64)
 	if err != nil {
-		pageData.ErrorMessage = "Ungültige Eingabe für Punkteschrittweite"
+		pageData.Message = &Message{
+			Text: "Ungültige Eingabe für Punkteschrittweite",
+			Type: MessageTypeError,
+		}
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
@@ -118,7 +139,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	breakPointPercent, err := strconv.ParseFloat(breakPointPercentStr, 64)
 	if err != nil {
-		pageData.ErrorMessage = "Ungültige Eingabe für Knickpunkt"
+		pageData.Message = &Message{
+			Text: "Ungültige Eingabe für Knickpunkt",
+			Type: MessageTypeError,
+		}
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
@@ -126,7 +150,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	// Validate input
 	if float64(maxPoints) <= minPoints {
-		pageData.ErrorMessage = "Maximale Punktzahl muss größer als Punkteschrittweite sein"
+		pageData.Message = &Message{
+			Text: "Maximale Punktzahl muss größer als Punkteschrittweite sein",
+			Type: MessageTypeError,
+		}
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
@@ -189,7 +216,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		// Create temporary file to store the upload
 		tempFile, err := os.CreateTemp("", "upload-*.csv")
 		if err != nil {
-			pageData.ErrorMessage = "Fehler bei der Verarbeitung des CSV-Files"
+			pageData.Message = &Message{
+				Text: "Fehler bei der Verarbeitung des CSV-Files",
+				Type: MessageTypeError,
+			}
 			templates.ExecuteTemplate(w, "index.html", pageData)
 			return
 		}
@@ -199,7 +229,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		// Copy uploaded file to temp file
 		_, err = io.Copy(tempFile, file)
 		if err != nil {
-			pageData.ErrorMessage = "Fehler beim Speichern des CSV-Files"
+			pageData.Message = &Message{
+				Text: "Fehler beim Speichern des CSV-Files",
+				Type: MessageTypeError,
+			}
 			templates.ExecuteTemplate(w, "index.html", pageData)
 			return
 		}
@@ -207,7 +240,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		// Load students from temp file
 		students, err := loadStudentsFromCSV(tempFile.Name())
 		if err != nil {
-			pageData.ErrorMessage = fmt.Sprintf("Fehler beim Laden des CSV-Files: %v", err)
+			pageData.Message = &Message{
+				Text: fmt.Sprintf("Fehler beim Laden des CSV-Files: %v", err),
+				Type: MessageTypeError,
+			}
 			templates.ExecuteTemplate(w, "index.html", pageData)
 			return
 		}
@@ -232,7 +268,10 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 			pageData.AverageGrade = gradeSum / float64(len(students))
 		}
 
-		pageData.ErrorMessage = fmt.Sprintf("CSV-Datei '%s' erfolgreich geladen", handler.Filename)
+		pageData.Message = &Message{
+			Text: fmt.Sprintf("CSV-Datei '%s' erfolgreich geladen", handler.Filename),
+			Type: MessageTypeSuccess,
+		}
 	}
 
 	// Store results in session for later download
