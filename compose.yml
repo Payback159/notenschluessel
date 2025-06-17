@@ -1,8 +1,6 @@
 services:
   notenschluessel:
-    build:
-      context: .
-      dockerfile: dockerfile
+    image: payback159/notenschluessel:latest
     ports:
       - "8080:8080"
     volumes:
