@@ -97,6 +97,18 @@
             font-weight: bold;
         }
 
+        .info {
+            color: #4299e1;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .warning {
+            color: #d69e2e;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
         .download-btn {
             background-color: #38a169;
             color: white;
@@ -231,8 +243,8 @@
     <div class="container">
         <h2>Eingabe</h2>
 
-        {{if .ErrorMessage}}
-        <p class="error">{{.ErrorMessage}}</p>
+        {{if .Message}}
+        <p class="{{.Message.Type}}">{{.Message.Text}}</p>
         {{end}}
 
         <form action="/" method="post" enctype="multipart/form-data">
