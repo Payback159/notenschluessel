@@ -29,6 +29,7 @@ COPY --from=build-env /app/notenschluessel /app/
 COPY --from=build-env /app/templates/ /app/templates/
 COPY --from=build-env /etc/passwd_single /etc/passwd
 COPY --from=build-env /etc/group_single /etc/group
+
 USER 10001
 
 ENTRYPOINT ["/app/notenschluessel"]

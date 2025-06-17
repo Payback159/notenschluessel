@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -51,6 +52,7 @@ type PageData struct {
 	CalculationSuccess bool
 	Message            *Message
 	SessionID          string
+	GitHubConfigured   bool
 }
 
 type GradeBound struct {
@@ -59,8 +61,131 @@ type GradeBound struct {
 	UpperBound float64
 }
 
+// Bug report structures
+type BugReport struct {
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Steps          string `json:"steps"`
+	Expected       string `json:"expected"`
+	Browser        string `json:"browser"`
+	OS             string `json:"os"`
+	MaxPoints      string `json:"maxPoints"`
+	MinPoints      string `json:"minPoints"`
+	BreakPoint     string `json:"breakPoint"`
+	CSVUsed        string `json:"csvUsed"`
+	AdditionalInfo string `json:"additionalInfo"`
+}
+
+type BugReportResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+type GitHubIssue struct {
+	Title  string   `json:"title"`
+	Body   string   `json:"body"`
+	Labels []string `json:"labels"`
+}
+
+type GitHubClient struct {
+	token string
+	repo  string
+}
+
 // Session storage to keep track of calculation results
 var sessionResults = make(map[string]PageData)
+
+// Check if GitHub is configured
+func isGitHubConfigured() bool {
+	token := os.Getenv("GITHUB_TOKEN")
+	repo := os.Getenv("GITHUB_REPO")
+	return token != "" && repo != ""
+}
+
+// GitHub client for creating issues
+func newGitHubClient() *GitHubClient {
+	return &GitHubClient{
+		token: os.Getenv("GITHUB_TOKEN"),
+		repo:  os.Getenv("GITHUB_REPO"),
+	}
+}
+
+func (g *GitHubClient) isConfigured() bool {
+	return g.token != "" && g.repo != ""
+}
+
+func (g *GitHubClient) createIssue(report BugReport) error {
+	if !g.isConfigured() {
+		return fmt.Errorf("GitHub client not configured")
+	}
+
+	// Create issue body from bug report
+	body := fmt.Sprintf(`## 🐛 Fehlerbeschreibung
+%s
+
+## 🔄 Schritte zur Reproduktion
+%s
+
+## ✅ Erwartetes Verhalten
+%s
+
+## 💻 Systeminformationen
+- Browser: %s
+- Betriebssystem: %s
+
+## 📋 Eingabedaten
+- Maximale Punktzahl: %s
+- Punkteschrittweite: %s
+- Knickpunkt: %s
+- CSV-Datei verwendet: %s
+
+## 📝 Zusätzlicher Kontext
+%s
+
+---
+*Automatisch erstellt über das Bug-Report-Formular*`,
+		report.Description, report.Steps, report.Expected,
+		report.Browser, report.OS,
+		report.MaxPoints, report.MinPoints, report.BreakPoint, report.CSVUsed,
+		report.AdditionalInfo)
+
+	issue := GitHubIssue{
+		Title:  "[BUG] " + report.Title,
+		Body:   body,
+		Labels: []string{"bug", "user-report"},
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(issue)
+	if err != nil {
+		return err
+	}
+
+	// Create HTTP request
+	url := fmt.Sprintf("https://api.github.com/repos/%s/issues", g.repo)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", "token "+g.token)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	// Send request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
 
 func main() {
 	// Load templates
@@ -74,7 +199,9 @@ func main() {
 		}
 
 		if r.Method == http.MethodGet {
-			templates.ExecuteTemplate(w, "index.html", PageData{})
+			templates.ExecuteTemplate(w, "index.html", PageData{
+				GitHubConfigured: isGitHubConfigured(),
+			})
 			return
 		}
 
@@ -94,6 +221,9 @@ func main() {
 	http.HandleFunc("/download/student-results-excel", handleStudentResultsExcelDownload)
 	http.HandleFunc("/download/combined-excel", handleCombinedExcelDownload)
 
+	// Add bug report handler
+	http.HandleFunc("/api/bug-report", handleBugReport)
+
 	// Start server
 	fmt.Println("Server läuft auf http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -107,7 +237,9 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		return
 	}
 
-	pageData := PageData{}
+	pageData := PageData{
+		GitHubConfigured: isGitHubConfigured(),
+	}
 
 	// Get form values
 	maxPointsStr := r.FormValue("maxPoints")
@@ -812,4 +944,77 @@ func calculateGrade(points, lowerBound1, lowerBound2, lowerBound3, lowerBound4, 
 	default:
 		return 5
 	}
+}
+
+// Handler for bug reports
+func handleBugReport(w http.ResponseWriter, r *http.Request) {
+	// Only allow POST requests
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Set CORS headers for frontend
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	// Parse JSON request
+	var bugReport BugReport
+	err := json.NewDecoder(r.Body).Decode(&bugReport)
+	if err != nil {
+		response := BugReportResponse{
+			Success: false,
+			Message: "Ungültige Anfrage: " + err.Error(),
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Validate required fields
+	if bugReport.Title == "" || bugReport.Description == "" {
+		response := BugReportResponse{
+			Success: false,
+			Message: "Titel und Beschreibung sind erforderlich",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Check if GitHub is configured
+	if !isGitHubConfigured() {
+		response := BugReportResponse{
+			Success: false,
+			Message: "Bug-Report-Funktion ist nicht verfügbar",
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Create GitHub client and try to create issue
+	gitHubClient := newGitHubClient()
+
+	// Try to create GitHub issue
+	err = gitHubClient.createIssue(bugReport)
+	if err != nil {
+		log.Printf("Failed to create GitHub issue: %v", err)
+		response := BugReportResponse{
+			Success: false,
+			Message: "Fehler beim Übermitteln des Bug-Reports. Bitte versuchen Sie es später erneut.",
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Success
+	response := BugReportResponse{
+		Success: true,
+		Message: "Bug-Report wurde erfolgreich übermittelt. Vielen Dank!",
+	}
+	json.NewEncoder(w).Encode(response)
 }

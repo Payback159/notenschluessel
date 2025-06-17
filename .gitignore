@@ -1,1 +1,6 @@
 notenschluessel
+
+# Environment files (contains sensitive data)
+.env
+.env.local
+.env.production
