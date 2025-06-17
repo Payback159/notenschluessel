@@ -110,7 +110,7 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	minPoints, err := strconv.ParseFloat(minPointsStr, 64)
 	if err != nil {
-		pageData.ErrorMessage = "Ungültige Eingabe für minimale Punktevergabe"
+		pageData.ErrorMessage = "Ungültige Eingabe für Punkteschrittweite"
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
@@ -126,7 +126,7 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	// Validate input
 	if float64(maxPoints) <= minPoints {
-		pageData.ErrorMessage = "Maximale Punktzahl muss größer als minimale Punktevergabe sein"
+		pageData.ErrorMessage = "Maximale Punktzahl muss größer als Punkteschrittweite sein"
 		templates.ExecuteTemplate(w, "index.html", pageData)
 		return
 	}
