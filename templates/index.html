@@ -151,6 +151,77 @@
         .excel-btn:hover {
             background-color: #204278;
         }
+
+        /* Tooltip styles */
+        .tooltip-container {
+            position: relative;
+            display: inline-block;
+            margin-left: 8px;
+        }
+
+        .info-icon {
+            width: 18px;
+            height: 18px;
+            background-color: #4299e1;
+            color: white;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: help;
+            vertical-align: middle;
+        }
+
+        .tooltip {
+            visibility: hidden;
+            background-color: #333;
+            color: white;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 150%;
+            left: 50%;
+            margin-left: -150px;
+            width: 300px;
+            font-size: 13px;
+            line-height: 1.4;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+
+        .tooltip-container:hover .tooltip {
+            visibility: visible;
+        }
+
+        .csv-example {
+            background-color: #f8f9fa;
+            color: #333;
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border-left: 3px solid #4299e1;
+        }
+
+        .label-with-icon {
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
 
@@ -184,9 +255,29 @@
             </div>
 
             <div>
-                <label for="csvFile">CSV-Datei mit Schülerpunkten (optional):</label>
+                <div class="label-with-icon">
+                    <label for="csvFile">CSV-Datei mit Schülerpunkten (optional):</label>
+                    <div class="tooltip-container">
+                        <span class="info-icon">i</span>
+                        <div class="tooltip">
+                            <strong>CSV-Format Beispiel:</strong>
+                            <div class="csv-example">
+                                Name,Punkte<br>
+                                Max Mustermann,45.5<br>
+                                Anna Schmidt,38.0<br>
+                                Tom Weber,42.5<br>
+                                Lisa Müller,35.5
+                            </div>
+                            <br>
+                            <strong>Wichtige Hinweise:</strong><br>
+                            • Erste Zeile enthält die Spaltenüberschriften<br>
+                            • Name und Punkte durch Komma getrennt<br>
+                            • Dezimalzahlen mit Punkt (nicht Komma)<br>
+                            • Datei muss als .csv gespeichert werden
+                        </div>
+                    </div>
+                </div>
                 <input type="file" id="csvFile" name="csvFile" accept=".csv">
-                <small>Format: Eine Spalte für Namen, eine Spalte für Punkte</small>
             </div>
 
             <button type="submit">Berechnen</button>
