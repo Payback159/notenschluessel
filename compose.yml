@@ -4,13 +4,53 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /tmp:/tmp
+      # Use tmpfs for temporary files instead of host /tmp
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 100M
+          mode: 1777
     restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - ENV=production
+      # GitHub configuration (optional)
+      # - GITHUB_TOKEN=${GITHUB_TOKEN}
+      # - GITHUB_REPO=${GITHUB_REPO}
+    
     # Security options
     security_opt:
       - no-new-privileges:true
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    
     # Resource limits
     deploy:
       resources:
         limits:
           memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "/app/notenschluessel", "--health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
