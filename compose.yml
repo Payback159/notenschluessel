@@ -15,9 +15,6 @@ services:
     # Environment variables
     environment:
       - ENV=production
-      # GitHub configuration (optional)
-      # - GITHUB_TOKEN=${GITHUB_TOKEN}
-      # - GITHUB_REPO=${GITHUB_REPO}
     
     # Security options
     security_opt:
