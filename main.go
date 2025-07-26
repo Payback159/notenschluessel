@@ -289,8 +289,7 @@ func generateSessionID() string {
 	return hex.EncodeToString(bytes)
 }
 
-// Session storage to keep track of calculation results (DEPRECATED - using SessionStore now)
-var sessionResults = make(map[string]PageData)
+// Removed deprecated sessionResults map. All session data is now managed using SessionStore.
 
 // Check if GitHub is configured
 func isGitHubConfigured() bool {
