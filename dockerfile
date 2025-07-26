@@ -12,6 +12,7 @@ RUN go mod download
 
 # Copy source code
 COPY *.go ./
+COPY pkg/ ./pkg/
 COPY templates ./templates
 
 # Build the binary with security flags
