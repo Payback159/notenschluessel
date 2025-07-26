@@ -251,8 +251,8 @@
             {{ .CSRFField }}
             <div>
                 <label for="maxPoints">Maximale Punktzahl:</label>
-                <input type="number" id="maxPoints" name="maxPoints" value="{{if .MaxPoints}}{{.MaxPoints}}{{end}}"
-                    required>
+                <input type="number" id="maxPoints" name="maxPoints"
+                    value="{{if .MaxPoints}}{{.MaxPoints}}{{else}}100{{end}}" required>
             </div>
 
             <div>
