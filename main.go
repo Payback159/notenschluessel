@@ -2,21 +2,27 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"math"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/gorilla/csrf"
 	"github.com/xuri/excelize/v2"
+	"golang.org/x/time/rate"
 )
 
 type Student struct {
@@ -53,6 +59,7 @@ type PageData struct {
 	Message            *Message
 	SessionID          string
 	GitHubConfigured   bool
+	CSRFField          template.HTML
 }
 
 type GradeBound struct {
@@ -92,7 +99,197 @@ type GitHubClient struct {
 	repo  string
 }
 
-// Session storage to keep track of calculation results
+// Constants for security limits
+const (
+	maxFileSize     = 5 * 1024 * 1024 // 5MB
+	maxStudents     = 1000
+	sessionTimeout  = time.Hour
+	cleanupInterval = 15 * time.Minute
+	rateLimit       = 10              // requests per minute
+	rateLimitPeriod = 6 * time.Second // 60s / 10 requests
+)
+
+// Secure session storage
+type SessionStore struct {
+	mu       sync.RWMutex
+	sessions map[string]*SessionData
+}
+
+type SessionData struct {
+	PageData  PageData
+	CreatedAt time.Time
+}
+
+func NewSessionStore() *SessionStore {
+	store := &SessionStore{
+		sessions: make(map[string]*SessionData),
+	}
+	store.startCleanup()
+	return store
+}
+
+func (s *SessionStore) Set(id string, data PageData) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessions[id] = &SessionData{
+		PageData:  data,
+		CreatedAt: time.Now(),
+	}
+}
+
+func (s *SessionStore) Get(id string) (PageData, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	session, exists := s.sessions[id]
+	if !exists {
+		return PageData{}, false
+	}
+
+	// Check if session expired
+	if time.Since(session.CreatedAt) > sessionTimeout {
+		return PageData{}, false
+	}
+
+	return session.PageData, true
+}
+
+func (s *SessionStore) Delete(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.sessions, id)
+}
+
+func (s *SessionStore) startCleanup() {
+	ticker := time.NewTicker(cleanupInterval)
+	go func() {
+		for range ticker.C {
+			s.mu.Lock()
+			for id, session := range s.sessions {
+				if time.Since(session.CreatedAt) > sessionTimeout {
+					delete(s.sessions, id)
+				}
+			}
+			s.mu.Unlock()
+		}
+	}()
+}
+
+// Rate limiter
+type RateLimiter struct {
+	limiters map[string]*rate.Limiter
+	mu       sync.RWMutex
+}
+
+func NewRateLimiter() *RateLimiter {
+	return &RateLimiter{
+		limiters: make(map[string]*rate.Limiter),
+	}
+}
+
+func (rl *RateLimiter) GetLimiter(ip string) *rate.Limiter {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	limiter, exists := rl.limiters[ip]
+	if !exists {
+		limiter = rate.NewLimiter(rate.Every(rateLimitPeriod), rateLimit)
+		rl.limiters[ip] = limiter
+	}
+
+	return limiter
+}
+
+// Global instances
+var (
+	sessionStore = NewSessionStore()
+	rateLimiter  = NewRateLimiter()
+)
+
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (from reverse proxy)
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		// Take the first IP if multiple are present
+		if idx := strings.Index(forwarded, ","); idx != -1 {
+			return strings.TrimSpace(forwarded[:idx])
+		}
+		return strings.TrimSpace(forwarded)
+	}
+
+	// Check X-Real-IP header
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		return strings.TrimSpace(realIP)
+	}
+
+	// Fall back to RemoteAddr
+	return r.RemoteAddr
+}
+
+func validateCSVFile(file multipart.File, header *multipart.FileHeader) error {
+	if header.Size > maxFileSize {
+		return fmt.Errorf("Datei zu groß (max. 5MB)")
+	}
+
+	// Check file extension
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".csv") {
+		return fmt.Errorf("Nur CSV-Dateien erlaubt")
+	}
+
+	return nil
+}
+
+func sanitizeName(name string) string {
+	// Remove control characters and limit length
+	name = strings.TrimSpace(name)
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	// Remove any HTML/Script tags
+	name = strings.ReplaceAll(name, "<", "&lt;")
+	name = strings.ReplaceAll(name, ">", "&gt;")
+	name = strings.ReplaceAll(name, "\"", "&quot;")
+	name = strings.ReplaceAll(name, "'", "&#39;")
+	return name
+}
+
+// Middleware functions
+func securityHeaders(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'")
+
+		next(w, r)
+	}
+}
+
+func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ip := getClientIP(r)
+		limiter := rateLimiter.GetLimiter(ip)
+
+		if !limiter.Allow() {
+			http.Error(w, "Zu viele Anfragen. Bitte versuchen Sie es später erneut.", http.StatusTooManyRequests)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// Security utility functions
+func generateSessionID() string {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to timestamp if crypto/rand fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// Session storage to keep track of calculation results (DEPRECATED - using SessionStore now)
 var sessionResults = make(map[string]PageData)
 
 // Check if GitHub is configured
@@ -118,6 +315,9 @@ func (g *GitHubClient) createIssue(report BugReport) error {
 	if !g.isConfigured() {
 		return fmt.Errorf("GitHub client not configured")
 	}
+
+	// Don't log the token - only log repo for debugging
+	log.Printf("Creating GitHub issue in repo: %s", g.repo)
 
 	// Create issue body from bug report
 	body := fmt.Sprintf(`## 🐛 Fehlerbeschreibung
@@ -188,20 +388,46 @@ func (g *GitHubClient) createIssue(report BugReport) error {
 }
 
 func main() {
+	// Check for health check flag
+	if len(os.Args) > 1 && os.Args[1] == "--health-check" {
+		// Simple health check - just exit with 0 if we can start
+		fmt.Println("OK")
+		os.Exit(0)
+	}
+
 	// Load templates
 	templates := template.Must(template.ParseGlob("templates/*.html"))
 
-	// Register handlers
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// Generate CSRF key
+	csrfKey := make([]byte, 32)
+	if _, err := rand.Read(csrfKey); err != nil {
+		log.Fatal("Failed to generate CSRF key:", err)
+	}
+
+	// Configure CSRF protection (only in production)
+	var csrfMiddleware func(http.Handler) http.Handler
+	if os.Getenv("ENV") == "production" {
+		csrfMiddleware = csrf.Protect(csrfKey, csrf.Secure(true))
+	} else {
+		csrfMiddleware = csrf.Protect(csrfKey, csrf.Secure(false))
+	}
+
+	// Create multiplexer
+	mux := http.NewServeMux()
+
+	// Register handlers with middleware
+	mux.HandleFunc("/", securityHeaders(rateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
 
 		if r.Method == http.MethodGet {
-			templates.ExecuteTemplate(w, "index.html", PageData{
+			pageData := PageData{
 				GitHubConfigured: isGitHubConfigured(),
-			})
+				CSRFField:        csrf.TemplateField(r),
+			}
+			templates.ExecuteTemplate(w, "index.html", pageData)
 			return
 		}
 
@@ -209,24 +435,27 @@ func main() {
 			handleCalculation(w, r, templates)
 			return
 		}
-	})
+	})))
 
-	// Add download handlers
-	http.HandleFunc("/download/grade-scale", handleGradeScaleDownload)
-	http.HandleFunc("/download/student-results", handleStudentResultsDownload)
-	http.HandleFunc("/download/combined", handleCombinedDownload)
+	// Add download handlers (no rate limiting for downloads)
+	mux.HandleFunc("/download/grade-scale", securityHeaders(handleGradeScaleDownload))
+	mux.HandleFunc("/download/student-results", securityHeaders(handleStudentResultsDownload))
+	mux.HandleFunc("/download/combined", securityHeaders(handleCombinedDownload))
 
 	// Add Excel download handlers
-	http.HandleFunc("/download/grade-scale-excel", handleGradeScaleExcelDownload)
-	http.HandleFunc("/download/student-results-excel", handleStudentResultsExcelDownload)
-	http.HandleFunc("/download/combined-excel", handleCombinedExcelDownload)
+	mux.HandleFunc("/download/grade-scale-excel", securityHeaders(handleGradeScaleExcelDownload))
+	mux.HandleFunc("/download/student-results-excel", securityHeaders(handleStudentResultsExcelDownload))
+	mux.HandleFunc("/download/combined-excel", securityHeaders(handleCombinedExcelDownload))
 
-	// Add bug report handler
-	http.HandleFunc("/api/bug-report", handleBugReport)
+	// Add bug report handler with rate limiting
+	mux.HandleFunc("/api/bug-report", securityHeaders(rateLimitMiddleware(handleBugReport)))
+
+	// Apply CSRF middleware to the entire mux
+	handler := csrfMiddleware(mux)
 
 	// Start server
 	fmt.Println("Server läuft auf http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
 
 func handleCalculation(w http.ResponseWriter, r *http.Request, templates *template.Template) {
@@ -239,6 +468,7 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	pageData := PageData{
 		GitHubConfigured: isGitHubConfigured(),
+		CSRFField:        csrf.TemplateField(r),
 	}
 
 	// Get form values
@@ -345,8 +575,18 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 	if err == nil && file != nil {
 		defer file.Close()
 
-		// Create temporary file to store the upload
-		tempFile, err := os.CreateTemp("", "upload-*.csv")
+		// Validate CSV file
+		if err := validateCSVFile(file, handler); err != nil {
+			pageData.Message = &Message{
+				Text: fmt.Sprintf("Fehler beim Validieren der CSV-Datei: %v", err),
+				Type: MessageTypeError,
+			}
+			templates.ExecuteTemplate(w, "index.html", pageData)
+			return
+		}
+
+		// Create secure temp directory
+		tempDir, err := os.MkdirTemp("", "notenschluessel-*")
 		if err != nil {
 			pageData.Message = &Message{
 				Text: "Fehler bei der Verarbeitung des CSV-Files",
@@ -355,7 +595,18 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 			templates.ExecuteTemplate(w, "index.html", pageData)
 			return
 		}
-		defer os.Remove(tempFile.Name())
+		defer os.RemoveAll(tempDir) // Clean up entire directory
+
+		// Create temp file in secure directory
+		tempFile, err := os.CreateTemp(tempDir, "upload-*.csv")
+		if err != nil {
+			pageData.Message = &Message{
+				Text: "Fehler bei der Verarbeitung des CSV-Files",
+				Type: MessageTypeError,
+			}
+			templates.ExecuteTemplate(w, "index.html", pageData)
+			return
+		}
 		defer tempFile.Close()
 
 		// Copy uploaded file to temp file
@@ -380,6 +631,21 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 			return
 		}
 
+		// Validate number of students
+		if len(students) > maxStudents {
+			pageData.Message = &Message{
+				Text: fmt.Sprintf("Zu viele Schüler in der CSV-Datei (max. %d)", maxStudents),
+				Type: MessageTypeError,
+			}
+			templates.ExecuteTemplate(w, "index.html", pageData)
+			return
+		}
+
+		// Sanitize student names
+		for i := range students {
+			students[i].Name = sanitizeName(students[i].Name)
+		}
+
 		// Calculate grades for students
 		var gradeSum float64
 		for i := range students {
@@ -401,13 +667,16 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 		}
 
 		pageData.Message = &Message{
-			Text: fmt.Sprintf("CSV-Datei '%s' erfolgreich geladen", handler.Filename),
+			Text: fmt.Sprintf("CSV-Datei '%s' erfolgreich geladen", sanitizeName(handler.Filename)),
 			Type: MessageTypeSuccess,
 		}
 	}
 
-	// Store results in session for later download
+	// Store results in secure session store
 	sessionID := generateSessionID()
+	sessionStore.Set(sessionID, pageData)
+
+	// Also store in legacy sessionResults for backwards compatibility with download handlers
 	sessionResults[sessionID] = pageData
 
 	// Add session ID to the template data
@@ -415,11 +684,6 @@ func handleCalculation(w http.ResponseWriter, r *http.Request, templates *templa
 
 	// Render template with results
 	templates.ExecuteTemplate(w, "index.html", pageData)
-}
-
-// Function to generate a simple session ID
-func generateSessionID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
 // Handler for grade scale download
@@ -960,6 +1224,9 @@ func handleBugReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
+	// Limit request body size (1MB)
+	r.Body = http.MaxBytesReader(w, r.Body, 1024*1024)
+
 	// Parse JSON request
 	var bugReport BugReport
 	err := json.NewDecoder(r.Body).Decode(&bugReport)
@@ -973,6 +1240,15 @@ func handleBugReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate and sanitize input fields
+	bugReport.Title = strings.TrimSpace(bugReport.Title)
+	bugReport.Description = strings.TrimSpace(bugReport.Description)
+	bugReport.Steps = strings.TrimSpace(bugReport.Steps)
+	bugReport.Expected = strings.TrimSpace(bugReport.Expected)
+	bugReport.Browser = strings.TrimSpace(bugReport.Browser)
+	bugReport.OS = strings.TrimSpace(bugReport.OS)
+	bugReport.AdditionalInfo = strings.TrimSpace(bugReport.AdditionalInfo)
+
 	// Validate required fields
 	if bugReport.Title == "" || bugReport.Description == "" {
 		response := BugReportResponse{
@@ -983,6 +1259,36 @@ func handleBugReport(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	// Validate field lengths
+	if len(bugReport.Title) > 200 {
+		response := BugReportResponse{
+			Success: false,
+			Message: "Titel ist zu lang (max. 200 Zeichen)",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	if len(bugReport.Description) > 2000 {
+		response := BugReportResponse{
+			Success: false,
+			Message: "Beschreibung ist zu lang (max. 2000 Zeichen)",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Sanitize all text fields
+	bugReport.Title = sanitizeName(bugReport.Title)
+	bugReport.Description = sanitizeName(bugReport.Description)
+	bugReport.Steps = sanitizeName(bugReport.Steps)
+	bugReport.Expected = sanitizeName(bugReport.Expected)
+	bugReport.Browser = sanitizeName(bugReport.Browser)
+	bugReport.OS = sanitizeName(bugReport.OS)
+	bugReport.AdditionalInfo = sanitizeName(bugReport.AdditionalInfo)
 
 	// Check if GitHub is configured
 	if !isGitHubConfigured() {
