@@ -38,6 +38,17 @@ func getCSRFField(r *http.Request) template.HTML {
 	return template.HTML("")
 }
 
+func (h *Handler) executeTemplateSafe(w http.ResponseWriter, templateName string, data interface{}, sessionID, ip string) {
+	if err := h.Templates.ExecuteTemplate(w, templateName, data); err != nil {
+		logging.LogError("Failed to execute template", err,
+			"template", templateName,
+			"session_id", sessionID,
+			"ip", ip)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
 // HandleHome handles the main page requests (GET and POST)
 func (h *Handler) HandleHome(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -49,7 +60,7 @@ func (h *Handler) HandleHome(w http.ResponseWriter, r *http.Request) {
 		pageData := models.PageData{
 			CSRFField: getCSRFField(r),
 		}
-		h.Templates.ExecuteTemplate(w, "index.html", pageData)
+		h.executeTemplateSafe(w, "index.html", pageData, "", security.GetClientIP(r))
 		return
 	}
 
@@ -82,6 +93,14 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		CSRFField: getCSRFField(r),
 	}
 
+	// Generate session ID early for error handling
+	sessionID, err := session.GenerateSessionID()
+	if err != nil {
+		logging.LogError("Failed to generate session ID", err, "ip", ip)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	// Parse input parameters
 	maxPointsStr := r.FormValue("maxPoints")
 	minPointsStr := r.FormValue("minPoints")
@@ -97,7 +116,7 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 			Type: models.MessageError,
 			Text: "Ungültige maximale Punktzahl (1-1000 erlaubt)",
 		}
-		h.Templates.ExecuteTemplate(w, "index.html", pageData)
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
 		return
 	}
 
@@ -111,7 +130,7 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 			Type: models.MessageError,
 			Text: "Ungültige Punkteschrittweite",
 		}
-		h.Templates.ExecuteTemplate(w, "index.html", pageData)
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
 		return
 	}
 
@@ -125,7 +144,7 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 			Type: models.MessageError,
 			Text: "Ungültiger Knickpunkt (1-99% erlaubt)",
 		}
-		h.Templates.ExecuteTemplate(w, "index.html", pageData)
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
 		return
 	}
 
@@ -183,15 +202,8 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate session ID and store data
-	sessionID, err := session.GenerateSessionID()
-	if err != nil {
-		logging.LogError("Failed to generate session ID", err, "ip", ip)
-		pageData.Message = &models.Message{
-			Type: models.MessageError,
-			Text: "Systemfehler bei der Session-Erstellung",
-		}
-	} else {
+	// Store data in session if no errors occurred
+	if pageData.Message == nil || pageData.Message.Type != models.MessageError {
 		h.SessionStore.Set(sessionID, pageData)
 		pageData.SessionID = sessionID
 
@@ -217,5 +229,5 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		"ip", ip)
 
 	// Render template with results
-	h.Templates.ExecuteTemplate(w, "index.html", pageData)
+	h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
 }
