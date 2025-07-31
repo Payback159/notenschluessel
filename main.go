@@ -115,5 +115,21 @@ func main() {
 	// Start server
 	logging.LogInfo("Server starting on port 8080")
 	fmt.Println("Server läuft auf http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", protectedHandler))
+
+	server := &http.Server{
+		Addr:           ":8080",
+		Handler:        protectedHandler,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1 MB
+	}
+
+	logging.LogInfo("Server configured with security timeouts",
+		"read_timeout", "15s",
+		"write_timeout", "15s",
+		"idle_timeout", "60s",
+		"max_header_bytes", "1MB")
+
+	log.Fatal(server.ListenAndServe())
 }

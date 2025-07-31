@@ -13,6 +13,62 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
+// setCellValueSafe safely sets a cell value with error handling
+func setCellValueSafe(f *excelize.File, sheet, axis string, value interface{}, sessionID, ip string) error {
+	if err := f.SetCellValue(sheet, axis, value); err != nil {
+		logging.LogError("Failed to set cell value", err,
+			"sheet", sheet,
+			"axis", axis,
+			"session_id", sessionID,
+			"ip", ip)
+		return err
+	}
+	return nil
+}
+
+// setCellStyleSafe safely sets a cell style with error handling
+func setCellStyleSafe(f *excelize.File, sheet, hCell, vCell string, styleID int, sessionID, ip string) {
+	if err := f.SetCellStyle(sheet, hCell, vCell, styleID); err != nil {
+		logging.LogError("Failed to set cell style", err,
+			"sheet", sheet,
+			"range", fmt.Sprintf("%s:%s", hCell, vCell),
+			"session_id", sessionID,
+			"ip", ip)
+		// Non-critical error for styles, continue execution
+	}
+} // createSheetSafe safely creates a new sheet with error handling
+func createSheetSafe(f *excelize.File, name, sessionID, ip string) error {
+	if _, err := f.NewSheet(name); err != nil {
+		logging.LogError("Failed to create sheet", err,
+			"sheet_name", name,
+			"session_id", sessionID,
+			"ip", ip)
+		return err
+	}
+	return nil
+}
+
+// deleteSheetSafe safely deletes a sheet with error handling
+func deleteSheetSafe(f *excelize.File, name, sessionID, ip string) {
+	if err := f.DeleteSheet(name); err != nil {
+		logging.LogError("Failed to delete sheet", err,
+			"sheet_name", name,
+			"session_id", sessionID,
+			"ip", ip)
+		// Non-critical error, continue
+	}
+}
+
+// writeResponseSafe safely writes response with error handling
+func writeResponseSafe(w http.ResponseWriter, buffer *bytes.Buffer, sessionID, ip string) {
+	if _, err := w.Write(buffer.Bytes()); err != nil {
+		logging.LogError("Failed to write response", err,
+			"session_id", sessionID,
+			"ip", ip)
+		// Response already started, can't send error status
+	}
+}
+
 // HandleGradeScaleCSV handles CSV download of grade scale
 func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
@@ -48,7 +104,7 @@ func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *s
 	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel.csv")
 
 	// Write content to response
-	w.Write(buffer.Bytes())
+	writeResponseSafe(w, &buffer, sessionID, ip)
 
 	duration := time.Since(start)
 	logging.LogFileOperation("csv_download", "notenschluessel.csv", int64(buffer.Len()), duration, true,
@@ -100,7 +156,7 @@ func HandleStudentResultsCSV(w http.ResponseWriter, r *http.Request, sessionStor
 	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.csv")
 
 	// Write content to response
-	w.Write(buffer.Bytes())
+	writeResponseSafe(w, &buffer, sessionID, ip)
 
 	duration := time.Since(start)
 	logging.LogFileOperation("csv_download", "schueler_ergebnisse.csv", int64(buffer.Len()), duration, true,
@@ -164,7 +220,7 @@ func HandleCombinedCSV(w http.ResponseWriter, r *http.Request, sessionStore *ses
 	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel_komplett.csv")
 
 	// Write content to response
-	w.Write(buffer.Bytes())
+	writeResponseSafe(w, &buffer, sessionID, ip)
 
 	duration := time.Since(start)
 	logging.LogFileOperation("csv_download", "notenschluessel_komplett.csv", int64(buffer.Len()), duration, true,
@@ -203,13 +259,25 @@ func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore 
 	}()
 
 	sheetName := "Notenschlüssel"
-	f.NewSheet(sheetName)
-	f.DeleteSheet("Sheet1")
+	if err := createSheetSafe(f, sheetName, sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	deleteSheetSafe(f, "Sheet1", sessionID, ip)
 
 	// Add headers
-	f.SetCellValue(sheetName, "A1", "Note")
-	f.SetCellValue(sheetName, "B1", "Punktebereich von")
-	f.SetCellValue(sheetName, "C1", "Punktebereich bis")
+	if err := setCellValueSafe(f, sheetName, "A1", "Note", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, sheetName, "B1", "Punktebereich von", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, sheetName, "C1", "Punktebereich bis", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
 
 	// Define grade styles with colors
 	gradeStyles := make(map[int]int)
@@ -272,12 +340,21 @@ func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore 
 	// Add data with styling
 	for i, bound := range data.GradeBounds {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), bound.Grade)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("A%d", row), bound.Grade, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("B%d", row), bound.LowerBound, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("C%d", row), bound.UpperBound, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
 
 		if style, exists := gradeStyles[bound.Grade]; exists {
-			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style)
+			setCellStyleSafe(f, sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style, sessionID, ip)
 		}
 	}
 
@@ -327,26 +404,53 @@ func HandleStudentResultsExcel(w http.ResponseWriter, r *http.Request, sessionSt
 	}()
 
 	sheetName := "Schülerergebnisse"
-	f.NewSheet(sheetName)
-	f.DeleteSheet("Sheet1")
+	if err := createSheetSafe(f, sheetName, sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	deleteSheetSafe(f, "Sheet1", sessionID, ip)
 
 	// Add headers
-	f.SetCellValue(sheetName, "A1", "Name")
-	f.SetCellValue(sheetName, "B1", "Punkte")
-	f.SetCellValue(sheetName, "C1", "Note")
+	if err := setCellValueSafe(f, sheetName, "A1", "Name", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, sheetName, "B1", "Punkte", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, sheetName, "C1", "Note", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
 
 	// Add data
 	for i, student := range data.Students {
 		row := i + 2
-		f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), student.Name)
-		f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), student.Points)
-		f.SetCellValue(sheetName, fmt.Sprintf("C%d", row), student.Grade)
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("A%d", row), student.Name, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("B%d", row), student.Points, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, sheetName, fmt.Sprintf("C%d", row), student.Grade, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Add average at the bottom
 	lastRow := len(data.Students) + 2
-	f.SetCellValue(sheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt")
-	f.SetCellValue(sheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade)
+	if err := setCellValueSafe(f, sheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, sheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade, sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
 
 	// Set headers for file download
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -465,50 +569,98 @@ func HandleCombinedExcel(w http.ResponseWriter, r *http.Request, sessionStore *s
 
 	// Create grade scale sheet
 	gradeSheetName := "Notenschlüssel"
-	f.NewSheet(gradeSheetName)
-	f.DeleteSheet("Sheet1")
+	if err := createSheetSafe(f, gradeSheetName, sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	deleteSheetSafe(f, "Sheet1", sessionID, ip)
 
 	// Add grade scale headers
-	f.SetCellValue(gradeSheetName, "A1", "Note")
-	f.SetCellValue(gradeSheetName, "B1", "Punktebereich von")
-	f.SetCellValue(gradeSheetName, "C1", "Punktebereich bis")
-	f.SetCellStyle(gradeSheetName, "A1", "C1", headerStyle)
+	if err := setCellValueSafe(f, gradeSheetName, "A1", "Note", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, gradeSheetName, "B1", "Punktebereich von", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	if err := setCellValueSafe(f, gradeSheetName, "C1", "Punktebereich bis", sessionID, ip); err != nil {
+		http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+		return
+	}
+	setCellStyleSafe(f, gradeSheetName, "A1", "C1", headerStyle, sessionID, ip)
 
 	// Add grade scale data
 	for i, bound := range data.GradeBounds {
 		row := i + 2
-		f.SetCellValue(gradeSheetName, fmt.Sprintf("A%d", row), bound.Grade)
-		f.SetCellValue(gradeSheetName, fmt.Sprintf("B%d", row), bound.LowerBound)
-		f.SetCellValue(gradeSheetName, fmt.Sprintf("C%d", row), bound.UpperBound)
+		if err := setCellValueSafe(f, gradeSheetName, fmt.Sprintf("A%d", row), bound.Grade, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, gradeSheetName, fmt.Sprintf("B%d", row), bound.LowerBound, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, gradeSheetName, fmt.Sprintf("C%d", row), bound.UpperBound, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
 
 		if style, exists := gradeStyles[bound.Grade]; exists {
-			f.SetCellStyle(gradeSheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style)
+			setCellStyleSafe(f, gradeSheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("C%d", row), style, sessionID, ip)
 		}
 	}
 
 	// Create student results sheet if students are available
 	if data.HasStudents {
 		studentSheetName := "Schülerergebnisse"
-		f.NewSheet(studentSheetName)
+		if err := createSheetSafe(f, studentSheetName, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
 
 		// Add student headers
-		f.SetCellValue(studentSheetName, "A1", "Name")
-		f.SetCellValue(studentSheetName, "B1", "Punkte")
-		f.SetCellValue(studentSheetName, "C1", "Note")
-		f.SetCellStyle(studentSheetName, "A1", "C1", headerStyle)
+		if err := setCellValueSafe(f, studentSheetName, "A1", "Name", sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, studentSheetName, "B1", "Punkte", sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, studentSheetName, "C1", "Note", sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		setCellStyleSafe(f, studentSheetName, "A1", "C1", headerStyle, sessionID, ip)
 
 		// Add student data
 		for i, student := range data.Students {
 			row := i + 2
-			f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", row), student.Name)
-			f.SetCellValue(studentSheetName, fmt.Sprintf("B%d", row), student.Points)
-			f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", row), student.Grade)
+			if err := setCellValueSafe(f, studentSheetName, fmt.Sprintf("A%d", row), student.Name, sessionID, ip); err != nil {
+				http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+				return
+			}
+			if err := setCellValueSafe(f, studentSheetName, fmt.Sprintf("B%d", row), student.Points, sessionID, ip); err != nil {
+				http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+				return
+			}
+			if err := setCellValueSafe(f, studentSheetName, fmt.Sprintf("C%d", row), student.Grade, sessionID, ip); err != nil {
+				http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		// Add average
 		lastRow := len(data.Students) + 2
-		f.SetCellValue(studentSheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt")
-		f.SetCellValue(studentSheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade)
+		if err := setCellValueSafe(f, studentSheetName, fmt.Sprintf("A%d", lastRow), "Durchschnitt", sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
+		if err := setCellValueSafe(f, studentSheetName, fmt.Sprintf("C%d", lastRow), data.AverageGrade, sessionID, ip); err != nil {
+			http.Error(w, "Failed to generate Excel file", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Set headers for file download

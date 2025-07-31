@@ -152,7 +152,9 @@ func ParseCSVFile(fileHeader *multipart.FileHeader) ([]models.Student, error) {
 	// Try to detect delimiter: first try comma, then semicolon
 	firstBytes := make([]byte, 1024)
 	n, _ := file.Read(firstBytes)
-	file.Seek(0, 0) // Reset file pointer
+	if _, err := file.Seek(0, 0); err != nil {
+		return []models.Student{}, fmt.Errorf("failed to reset file pointer: %w", err)
+	}
 
 	delimiter := ','
 	if n > 0 {
