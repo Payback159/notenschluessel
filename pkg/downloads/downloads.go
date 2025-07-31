@@ -29,14 +29,14 @@ func setCellValueSafe(f *excelize.File, sheet, axis string, value interface{}, s
 // setCellStyleSafe safely sets a cell style with error handling
 func setCellStyleSafe(f *excelize.File, sheet, hCell, vCell string, styleID int, sessionID, ip string) {
 	if err := f.SetCellStyle(sheet, hCell, vCell, styleID); err != nil {
-		logging.LogError("Failed to set cell style", err, 
-			"sheet", sheet, 
+		logging.LogError("Failed to set cell style", err,
+			"sheet", sheet,
 			"range", fmt.Sprintf("%s:%s", hCell, vCell),
-			"session_id", sessionID, 
+			"session_id", sessionID,
 			"ip", ip)
 		// Non-critical error for styles, continue execution
 	}
-}// createSheetSafe safely creates a new sheet with error handling
+} // createSheetSafe safely creates a new sheet with error handling
 func createSheetSafe(f *excelize.File, name, sessionID, ip string) error {
 	if _, err := f.NewSheet(name); err != nil {
 		logging.LogError("Failed to create sheet", err,
