@@ -1,7 +1,5 @@
 package models
 
-import "html/template"
-
 // Student represents a student with their name, points and calculated grade
 type Student struct {
 	Name   string
@@ -37,7 +35,7 @@ type PageData struct {
 	CalculationSuccess bool
 	Message            *Message
 	SessionID          string
-	CSRFField          template.HTML
+	// CSRFField removed - using Go 1.25+ native cross-origin protection
 }
 
 // GradeBound represents a grade boundary with upper and lower point limits

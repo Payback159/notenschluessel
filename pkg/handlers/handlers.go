@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
-	"github.com/gorilla/csrf"
 	"github.com/payback159/notenschluessel/pkg/calculator"
 	"github.com/payback159/notenschluessel/pkg/logging"
 	"github.com/payback159/notenschluessel/pkg/models"
@@ -30,13 +28,7 @@ func NewHandler(templates *template.Template, sessionStore *session.Store) *Hand
 	}
 }
 
-// getCSRFField returns CSRF field for production, empty string for development
-func getCSRFField(r *http.Request) template.HTML {
-	if os.Getenv("ENV") == "production" {
-		return csrf.TemplateField(r)
-	}
-	return template.HTML("")
-}
+// Go 1.25+ native cross-origin protection - no CSRF token functions needed
 
 func (h *Handler) executeTemplateSafe(w http.ResponseWriter, templateName string, data interface{}, sessionID, ip string) {
 	if err := h.Templates.ExecuteTemplate(w, templateName, data); err != nil {
@@ -58,7 +50,7 @@ func (h *Handler) HandleHome(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 		pageData := models.PageData{
-			CSRFField: getCSRFField(r),
+			// Go 1.25+ native cross-origin protection - no CSRF field needed
 		}
 		h.executeTemplateSafe(w, "index.html", pageData, "", security.GetClientIP(r))
 		return
@@ -89,9 +81,7 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pageData := models.PageData{
-		CSRFField: getCSRFField(r),
-	}
+	pageData := models.PageData{}
 
 	// Generate session ID early for error handling
 	sessionID, err := session.GenerateSessionID()
