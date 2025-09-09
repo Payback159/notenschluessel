@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
 	"html/template"
 	"log"
@@ -9,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/gorilla/csrf"
 	"github.com/payback159/notenschluessel/pkg/downloads"
 	"github.com/payback159/notenschluessel/pkg/handlers"
 	"github.com/payback159/notenschluessel/pkg/logging"
@@ -36,25 +34,24 @@ func main() {
 	templates := template.Must(template.ParseGlob("templates/*.html"))
 	logging.LogInfo("Templates loaded successfully")
 
-	// Generate CSRF key
-	csrfKey := make([]byte, 32)
-	if _, err := rand.Read(csrfKey); err != nil {
-		logging.LogCritical("Failed to generate CSRF key", err)
-		log.Fatal("Failed to generate CSRF key:", err)
-	}
-	logging.LogDebug("CSRF key generated successfully")
+	csrf := http.NewCrossOriginProtection()
 
-	// Configure CSRF protection
-	var csrfMiddleware func(http.Handler) http.Handler
+	// Add trusted origins for our application
 	if os.Getenv("ENV") == "production" {
-		csrfMiddleware = csrf.Protect(csrfKey, csrf.Secure(true))
-		logging.LogInfo("CSRF protection enabled for production")
-	} else {
-		// Development mode - disable CSRF protection for easier development
-		csrfMiddleware = func(h http.Handler) http.Handler {
-			return h // No CSRF protection in development
+		// In production, only trust HTTPS origins
+		if host := os.Getenv("HOSTNAME"); host != "" {
+			csrf.AddTrustedOrigin("https://" + host)
+			logging.LogInfo("CSRF protection configured for production", "host", host)
+		} else {
+			logging.LogInfo("CSRF protection enabled with default same-origin policy")
 		}
-		logging.LogInfo("CSRF protection disabled for development")
+	} else {
+		// In development, allow both HTTP and HTTPS localhost
+		csrf.AddTrustedOrigin("http://localhost:8080")
+		csrf.AddTrustedOrigin("https://localhost:8080")
+		csrf.AddTrustedOrigin("http://127.0.0.1:8080")
+		csrf.AddTrustedOrigin("https://127.0.0.1:8080")
+		logging.LogInfo("CSRF protection enabled for development with localhost origins")
 	}
 
 	// Initialize session store
@@ -65,6 +62,39 @@ func main() {
 	rateLimiter := security.NewRateLimiter()
 	logging.LogInfo("Rate limiter initialized")
 
+	securityHeaders := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Prevent embedding in frames
+			w.Header().Set("X-Frame-Options", "DENY")
+
+			// Prevent MIME type sniffing
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+
+			// XSS protection
+			w.Header().Set("X-XSS-Protection", "1; mode=block")
+
+			// Referrer policy
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+			// Strict transport security (HTTPS only)
+			if os.Getenv("ENV") == "production" {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
+
+			// Content Security Policy - very strict for our simple tool
+			w.Header().Set("Content-Security-Policy",
+				"default-src 'self'; "+
+					"script-src 'self' 'unsafe-inline'; "+
+					"style-src 'self' 'unsafe-inline'; "+
+					"img-src 'self' data:; "+
+					"form-action 'self'; "+
+					"frame-ancestors 'none'")
+
+			next.ServeHTTP(w, r)
+		})
+	}
+	logging.LogInfo("Security headers middleware initialized")
+
 	// Initialize handlers
 	handler := handlers.NewHandler(templates, sessionStore)
 	logging.LogInfo("HTTP handlers initialized")
@@ -72,33 +102,30 @@ func main() {
 	// Create multiplexer
 	mux := http.NewServeMux()
 
-	// Register main handler with middleware
-	mux.HandleFunc("/", security.SecurityHeaders(rateLimiter.RateLimitMiddleware(handler.HandleHome)))
+	mux.Handle("/", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(handler.HandleHome))))
 
-	// Add CSV download handlers (no rate limiting for downloads)
-	mux.HandleFunc("/download/grade-scale", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/download/grade-scale", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleGradeScaleCSV(w, r, sessionStore)
-	}))
-	mux.HandleFunc("/download/student-results", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	}))))
+	mux.Handle("/download/student-results", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleStudentResultsCSV(w, r, sessionStore)
-	}))
-	mux.HandleFunc("/download/combined", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	}))))
+	mux.Handle("/download/combined", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleCombinedCSV(w, r, sessionStore)
-	}))
+	}))))
 
-	// Add Excel download handlers
-	mux.HandleFunc("/download/grade-scale-excel", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	// Excel download handlers with CSRF protection
+	mux.Handle("/download/grade-scale-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleGradeScaleExcel(w, r, sessionStore)
-	}))
-	mux.HandleFunc("/download/student-results-excel", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	}))))
+	mux.Handle("/download/student-results-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleStudentResultsExcel(w, r, sessionStore)
-	}))
-	mux.HandleFunc("/download/combined-excel", security.SecurityHeaders(func(w http.ResponseWriter, r *http.Request) {
+	}))))
+	mux.Handle("/download/combined-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleCombinedExcel(w, r, sessionStore)
-	}))
+	}))))
 
-	// Apply CSRF middleware to the entire mux
-	protectedHandler := csrfMiddleware(mux)
+	protectedHandler := mux
 
 	// Start periodic system statistics logging
 	go func() {

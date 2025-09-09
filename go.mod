@@ -3,13 +3,11 @@ module github.com/payback159/notenschluessel
 go 1.25.1
 
 require (
-	github.com/gorilla/csrf v1.7.3
 	github.com/xuri/excelize/v2 v2.9.1
 	golang.org/x/time v0.13.0
 )
 
 require (
-	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
 	github.com/richardlehane/msoleps v1.0.4 // indirect
 	github.com/tiendc/go-deepcopy v1.6.1 // indirect
