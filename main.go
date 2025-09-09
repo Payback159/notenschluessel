@@ -21,9 +21,10 @@ func main() {
 	// Initialize structured logging
 	logging.InitLogger()
 
-	logging.LogInfo("Starting Notenschluessel service",
+	logging.LogInfo("Application startup initiated",
 		"version", "v1.0.0",
-		"environment", os.Getenv("ENV"))
+		"environment", os.Getenv("ENV"),
+		"startup_time", time.Now().Format(time.RFC3339))
 
 	// Check for health check flag
 	if len(os.Args) > 1 && os.Args[1] == "--health-check" {

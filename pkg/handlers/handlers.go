@@ -66,14 +66,18 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	ip := security.GetClientIP(r)
 
-	logging.LogInfo("Processing calculation request",
-		"ip", ip,
-		"user_agent", r.UserAgent())
+	logging.LogInfo("HTTP request processing initiated",
+		"method", r.Method,
+		"content_length", r.ContentLength,
+		"ip", ip)
 
 	// Parse form data
 	err := r.ParseMultipartForm(10 << 20) // 10MB max memory
 	if err != nil {
-		logging.LogError("Failed to parse multipart form", err, "ip", ip)
+		logging.LogError("Form parsing failed", err,
+			"content_length", r.ContentLength,
+			"content_type", r.Header.Get("Content-Type"),
+			"ip", ip)
 		http.Error(w, "Fehler beim Parsen des Formulars", http.StatusBadRequest)
 		return
 	}
@@ -89,9 +93,10 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	maxPoints, err := strconv.Atoi(maxPointsStr)
 	if err != nil || maxPoints <= 0 || maxPoints > 1000 {
-		logging.LogWarn("Invalid max points value",
-			"max_points_str", maxPointsStr,
-			"error", err,
+		logging.LogWarn("Invalid form input detected",
+			"field", "maxPoints",
+			"validation_error", "out_of_range_or_invalid",
+			"valid_range", "1-1000",
 			"ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
@@ -103,9 +108,10 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	minPoints, err := strconv.ParseFloat(minPointsStr, 64)
 	if err != nil || minPoints <= 0 || minPoints > float64(maxPoints) {
-		logging.LogWarn("Invalid min points value",
-			"min_points_str", minPointsStr,
-			"error", err,
+		logging.LogWarn("Invalid form input detected",
+			"field", "minPoints",
+			"validation_error", "negative_or_exceeds_max",
+			"constraint", "positive_and_below_max",
 			"ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
@@ -117,9 +123,10 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	breakPointPercent, err := strconv.ParseFloat(breakPointPercentStr, 64)
 	if err != nil || breakPointPercent < 1 || breakPointPercent > 99 {
-		logging.LogWarn("Invalid break point value",
-			"break_point_str", breakPointPercentStr,
-			"error", err,
+		logging.LogWarn("Invalid form input detected",
+			"field", "breakPointPercent",
+			"validation_error", "out_of_range",
+			"valid_range", "1-99",
 			"ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
@@ -145,16 +152,17 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		defer file.Close()
 
-		logging.LogInfo("Processing uploaded CSV file",
-			"filename", fileHeader.Filename,
-			"size", fileHeader.Size,
+		logging.LogInfo("File upload processing initiated",
+			"content_type", fileHeader.Header.Get("Content-Type"),
+			"content_length", fileHeader.Size,
+			"processing_stage", "parsing",
 			"ip", ip)
 
 		students, err := calculator.ParseCSVFile(fileHeader)
 		if err != nil {
-			logging.LogError("Failed to parse CSV file", err,
-				"filename", fileHeader.Filename,
-				"size", fileHeader.Size,
+			logging.LogError("CSV parsing operation failed", err,
+				"content_length", fileHeader.Size,
+				"parse_stage", "file_processing",
 				"ip", ip)
 			pageData.Message = &models.Message{
 				Type: models.MessageError,
@@ -169,14 +177,16 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 			pageData.AverageGrade = averageGrade
 			pageData.HasStudents = true
 
-			logging.LogInfo("Students processed successfully",
-				"student_count", len(students),
-				"average_grade", averageGrade,
-				"filename", fileHeader.Filename,
+			logging.LogInfo("CSV processing completed successfully",
+				"records_processed", len(students),
+				"calculation_result", averageGrade,
+				"processing_stage", "completed",
 				"ip", ip)
 		}
 	} else if err != http.ErrMissingFile {
-		logging.LogError("Error accessing uploaded file", err, "ip", ip)
+		logging.LogError("File access operation failed", err,
+			"operation", "file_upload_access",
+			"ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
 			Text: "Fehler beim Zugriff auf die hochgeladene Datei",
@@ -186,7 +196,9 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 	// Generate session ID and store data
 	sessionID, err := session.GenerateSessionID()
 	if err != nil {
-		logging.LogError("Failed to generate session ID", err, "ip", ip)
+		logging.LogError("Session ID generation failed", err,
+			"operation", "session_management",
+			"ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
 			Text: "Systemfehler bei der Session-Erstellung",
@@ -195,25 +207,24 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		h.SessionStore.Set(sessionID, pageData)
 		pageData.SessionID = sessionID
 
-		logging.LogDebug("Session created",
-			"session_id", sessionID,
-			"has_students", pageData.HasStudents,
-			"student_count", len(pageData.Students))
+		logging.LogDebug("Session management completed",
+			"session_id_length", len(sessionID),
+			"data_cached", pageData.HasStudents,
+			"cache_size", len(pageData.Students),
+			"session_status", "active")
 	}
 
 	// Log successful completion
 	duration := time.Since(start)
 	logging.LogCalculation(maxPoints, minPoints, breakPointPercent, len(pageData.Students), duration, true)
 
-	logging.LogInfo("Calculation completed successfully",
-		"session_id", sessionID,
-		"max_points", maxPoints,
-		"min_points", minPoints,
-		"break_point_percent", breakPointPercent,
-		"has_students", pageData.HasStudents,
-		"student_count", len(pageData.Students),
-		"average_grade", pageData.AverageGrade,
-		"duration_ms", duration.Milliseconds(),
+	logging.LogInfo("Request processing completed",
+		"session_id_length", len(sessionID),
+		"parameters_processed", 3,
+		"data_processed", pageData.HasStudents,
+		"records_count", len(pageData.Students),
+		"processing_time_ms", duration.Milliseconds(),
+		"status", "success",
 		"ip", ip)
 
 	// Render template with results

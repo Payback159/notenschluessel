@@ -19,17 +19,20 @@ func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *s
 	sessionID := r.URL.Query().Get("id")
 	ip := security.GetClientIP(r)
 
-	logging.LogInfo("Grade scale CSV download requested",
-		"session_id", sessionID,
+	logging.LogInfo("File download initiated",
+		"format", "csv",
+		"type", "grade_scale",
+		"session_id_length", len(sessionID),
 		"ip", ip)
 
 	data, exists := sessionStore.Get(sessionID)
 	if !exists || !data.HasResults {
-		logging.LogWarn("Grade scale download requested but no data available",
-			"session_id", sessionID,
-			"ip", ip,
+		logging.LogWarn("Download requested but no session data available",
+			"operation", "grade_scale_csv",
+			"session_status", "missing_or_empty",
 			"session_exists", exists,
-			"has_results", exists && data.HasResults)
+			"has_results", exists && data.HasResults,
+			"ip", ip)
 		http.Error(w, "Keine Daten zum Herunterladen verfügbar", http.StatusBadRequest)
 		return
 	}
