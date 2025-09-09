@@ -50,18 +50,69 @@
             box-sizing: border-box;
         }
 
-        button {
-            background-color: #4299e1;
+        /* Button styles - consolidated */
+        .btn {
             color: white;
-            border: none;
+            text-decoration: none;
+            display: inline-block;
             padding: 10px 15px;
             border-radius: 4px;
+            border: none;
             cursor: pointer;
             font-size: 16px;
+            margin: 5px 5px 5px 0;
+            transition: background-color 0.3s ease;
         }
 
-        button:hover {
+        .btn-primary {
+            background-color: #4299e1;
+        }
+
+        .btn-primary:hover {
             background-color: #3182ce;
+        }
+
+        .btn-success {
+            background-color: #38a169;
+            font-size: 14px;
+            padding: 6px 12px;
+        }
+
+        .btn-success:hover {
+            background-color: #2f855a;
+        }
+
+        .btn-excel {
+            background-color: #2b579a;
+            font-size: 14px;
+            padding: 6px 12px;
+        }
+
+        .btn-excel:hover {
+            background-color: #204278;
+        }
+
+        .download-btn {
+            background-color: #38a169;
+            color: white;
+            text-decoration: none;
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .download-btn:hover {
+            background-color: #2f855a;
+        }
+
+        .excel-btn {
+            background-color: #2b579a;
+        }
+
+        .excel-btn:hover {
+            background-color: #204278;
         }
 
         table {
@@ -85,43 +136,78 @@
             background-color: #f9f9f9;
         }
 
-        .error {
-            color: #e53e3e;
+        .message {
             margin-bottom: 10px;
             font-weight: bold;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+
+        .error {
+            color: #e53e3e;
+            background-color: #fed7d7;
+            border-left-color: #e53e3e;
         }
 
         .success {
             color: #38a169;
-            margin-bottom: 10px;
-            font-weight: bold;
+            background-color: #c6f6d5;
+            border-left-color: #38a169;
         }
 
         .info {
             color: #4299e1;
-            margin-bottom: 10px;
-            font-weight: bold;
+            background-color: #bee3f8;
+            border-left-color: #4299e1;
         }
 
         .warning {
             color: #d69e2e;
-            margin-bottom: 10px;
-            font-weight: bold;
+            background-color: #faf089;
+            border-left-color: #d69e2e;
         }
 
-        .download-btn {
-            background-color: #38a169;
+        /* Button styles - consolidated */
+        .btn {
             color: white;
             text-decoration: none;
             display: inline-block;
-            padding: 6px 12px;
+            padding: 10px 15px;
             border-radius: 4px;
-            margin-top: 10px;
-            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px 5px 5px 0;
+            transition: background-color 0.3s ease;
         }
 
-        .download-btn:hover {
+        .btn-primary {
+            background-color: #4299e1;
+        }
+
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+
+        .btn-success {
+            background-color: #38a169;
+            font-size: 14px;
+            padding: 6px 12px;
+        }
+
+        .btn-success:hover {
             background-color: #2f855a;
+        }
+
+        .btn-excel {
+            background-color: #2b579a;
+            font-size: 14px;
+            padding: 6px 12px;
+        }
+
+        .btn-excel:hover {
+            background-color: #204278;
         }
 
         .buttons-container {
@@ -129,39 +215,39 @@
             margin-bottom: 10px;
         }
 
-        /* Grade-specific colors for student results - make these more specific */
-        tbody tr.grade-1 {
+        /* Grade-specific colors - consolidated system */
+        .grade-row {
+            transition: background-color 0.2s ease;
+        }
+
+        tbody tr.grade-1,
+        tr.grade-1 {
             background-color: #c6f6d5 !important;
-            /* Light green with !important */
+            /* Excellent - Light green */
         }
 
-        tbody tr.grade-2 {
+        tbody tr.grade-2,
+        tr.grade-2 {
             background-color: #d4edda !important;
-            /* Pale green with !important */
+            /* Good - Pale green */
         }
 
-        tbody tr.grade-3 {
+        tbody tr.grade-3,
+        tr.grade-3 {
             background-color: #fff3cd !important;
-            /* Light yellow with !important */
+            /* Satisfactory - Light yellow */
         }
 
-        tbody tr.grade-4 {
+        tbody tr.grade-4,
+        tr.grade-4 {
             background-color: #ffe8cc !important;
-            /* Light orange with !important */
+            /* Sufficient - Light orange */
         }
 
-        tbody tr.grade-5 {
+        tbody tr.grade-5,
+        tr.grade-5 {
             background-color: #f8d7da !important;
-            /* Light red with !important */
-        }
-
-        .excel-btn {
-            background-color: #2b579a;
-            /* Excel blue color */
-        }
-
-        .excel-btn:hover {
-            background-color: #204278;
+            /* Insufficient - Light red */
         }
 
         /* Tooltip styles */
@@ -234,6 +320,22 @@
             display: flex;
             align-items: center;
         }
+
+        /* Form submit button - using consolidated btn style */
+        form button {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        form button:hover {
+            background-color: #3182ce;
+        }
     </style>
 </head>
 
@@ -244,7 +346,7 @@
         <h2>Eingabe</h2>
 
         {{if .Message}}
-        <p class="{{.Message.Type}}">{{.Message.Text}}</p>
+        <div class="message {{.Message.Type}}">{{.Message.Text}}</div>
         {{end}}
 
         <form action="/" method="post" enctype="multipart/form-data">
@@ -319,13 +421,11 @@
 
         <div class="buttons-container">
             {{if .HasStudents}}
-            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
-                herunterladen</a>
+            <a href="/download/combined?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/combined-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
             {{else}}
-            <a href="/download/grade-scale?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
-            <a href="/download/grade-scale-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
-                herunterladen</a>
+            <a href="/download/grade-scale?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/grade-scale-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
             {{end}}
         </div>
     </div>
@@ -356,9 +456,8 @@
         <h3>Notendurchschnitt: {{printf "%.2f" .AverageGrade}}</h3>
 
         <div class="buttons-container">
-            <a href="/download/combined?id={{.SessionID}}" class="download-btn">Als CSV herunterladen</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="download-btn excel-btn">Als Excel
-                herunterladen</a>
+            <a href="/download/combined?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/combined-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
         </div>
     </div>
     {{end}}
