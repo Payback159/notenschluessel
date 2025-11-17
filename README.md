@@ -78,19 +78,6 @@ docker run -p 8080:8080 \
    - Export student results with grades
    - Generate combined report
 
-### Austrian Grading Scale
-
-The calculator implements the standard Austrian 1-6 scale:
-
-| Grade | Rating                      | Points         |
-| ----- | --------------------------- | -------------- |
-| 1     | Sehr gut (Very Good)        | 85-100%        |
-| 2     | Gut (Good)                  | Breakpoint-85% |
-| 3     | Befriedigend (Satisfactory) | 60%-Breakpoint |
-| 4     | Ausreichend (Adequate)      | 33%-60%        |
-| 5     | Mangelhaft (Inadequate)     | 0-33%          |
-| 6     | Ungenügend (Failing)        | Below 0        |
-
 ### CSV Import Format
 
 ```csv
