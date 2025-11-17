@@ -3,7 +3,7 @@
 > A modern, secure Austrian grading scale calculator built with Go 1.25
 
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://golang.org)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 [![DSGVO Compliant](https://img.shields.io/badge/DSGVO-Compliant-green?style=flat-square)](https://gdpr-info.eu/)
 [![Security](https://img.shields.io/badge/Security-Native%20CSRF%20Protection-brightgreen?style=flat-square)](https://go.dev/blog/native-http-cors)
 
