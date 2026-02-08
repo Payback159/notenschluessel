@@ -69,10 +69,68 @@ func writeResponseSafe(w http.ResponseWriter, buffer *bytes.Buffer, sessionID, i
 	}
 }
 
+// getSessionIDFromCookie reads the session ID from an HttpOnly cookie
+func getSessionIDFromCookie(r *http.Request) string {
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+// sanitizeCSVField prevents CSV injection and properly escapes fields
+func sanitizeCSVField(field string) string {
+	// Prevent formula injection: prefix dangerous first characters
+	if len(field) > 0 {
+		first := field[0]
+		if first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r' {
+			field = "'" + field
+		}
+	}
+	// Properly quote fields containing commas, quotes, or newlines
+	if strings.ContainsAny(field, ",\"\n") {
+		field = "\"" + strings.ReplaceAll(field, "\"", "\"\"") + "\""
+	}
+	return field
+}
+
+// createGradeStyles creates colored Excel styles for each grade
+func createGradeStyles(f *excelize.File) map[int]int {
+	gradeStyles := make(map[int]int)
+	colors := map[int]string{
+		1: "#c6f6d5",
+		2: "#d4edda",
+		3: "#fff3cd",
+		4: "#ffe8cc",
+		5: "#f8d7da",
+	}
+	for grade, color := range colors {
+		style, _ := f.NewStyle(&excelize.Style{
+			Fill: excelize.Fill{Type: "pattern", Color: []string{color}, Pattern: 1},
+			Border: []excelize.Border{
+				{Type: "left", Color: "#000000", Style: 1},
+				{Type: "top", Color: "#000000", Style: 1},
+				{Type: "right", Color: "#000000", Style: 1},
+				{Type: "bottom", Color: "#000000", Style: 1},
+			},
+		})
+		gradeStyles[grade] = style
+	}
+	return gradeStyles
+}
+
+// setDownloadHeaders sets common security and caching headers for downloads
+func setDownloadHeaders(w http.ResponseWriter, contentType, filename string) {
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+}
+
 // HandleGradeScaleCSV handles CSV download of grade scale
 func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Grade scale CSV download requested",
@@ -100,8 +158,7 @@ func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *s
 	}
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel.csv")
+	setDownloadHeaders(w, "text/csv", "notenschluessel.csv")
 
 	// Write content to response
 	writeResponseSafe(w, &buffer, sessionID, ip)
@@ -116,7 +173,7 @@ func HandleGradeScaleCSV(w http.ResponseWriter, r *http.Request, sessionStore *s
 // HandleStudentResultsCSV handles CSV download of student results
 func HandleStudentResultsCSV(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Student results CSV download requested",
@@ -139,11 +196,7 @@ func HandleStudentResultsCSV(w http.ResponseWriter, r *http.Request, sessionStor
 	buffer.WriteString("Name,Punkte,Note\n")
 
 	for _, student := range data.Students {
-		// Escape names that might contain commas
-		escapedName := student.Name
-		if strings.Contains(escapedName, ",") {
-			escapedName = fmt.Sprintf("\"%s\"", escapedName)
-		}
+		escapedName := sanitizeCSVField(student.Name)
 		line := fmt.Sprintf("%s,%.1f,%d\n", escapedName, student.Points, student.Grade)
 		buffer.WriteString(line)
 	}
@@ -152,8 +205,7 @@ func HandleStudentResultsCSV(w http.ResponseWriter, r *http.Request, sessionStor
 	buffer.WriteString(fmt.Sprintf("Durchschnitt,,%.2f\n", data.AverageGrade))
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.csv")
+	setDownloadHeaders(w, "text/csv", "schueler_ergebnisse.csv")
 
 	// Write content to response
 	writeResponseSafe(w, &buffer, sessionID, ip)
@@ -168,7 +220,7 @@ func HandleStudentResultsCSV(w http.ResponseWriter, r *http.Request, sessionStor
 // HandleCombinedCSV handles CSV download of combined results
 func HandleCombinedCSV(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Combined CSV download requested",
@@ -205,10 +257,7 @@ func HandleCombinedCSV(w http.ResponseWriter, r *http.Request, sessionStore *ses
 		buffer.WriteString("SCHÜLERERGEBNISSE\n")
 		buffer.WriteString("Name,Punkte,Note\n")
 		for _, student := range data.Students {
-			escapedName := student.Name
-			if strings.Contains(escapedName, ",") {
-				escapedName = fmt.Sprintf("\"%s\"", escapedName)
-			}
+			escapedName := sanitizeCSVField(student.Name)
 			line := fmt.Sprintf("%s,%.1f,%d\n", escapedName, student.Points, student.Grade)
 			buffer.WriteString(line)
 		}
@@ -216,8 +265,7 @@ func HandleCombinedCSV(w http.ResponseWriter, r *http.Request, sessionStore *ses
 	}
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel_komplett.csv")
+	setDownloadHeaders(w, "text/csv", "notenschluessel_komplett.csv")
 
 	// Write content to response
 	writeResponseSafe(w, &buffer, sessionID, ip)
@@ -234,7 +282,7 @@ func HandleCombinedCSV(w http.ResponseWriter, r *http.Request, sessionStore *ses
 // HandleGradeScaleExcel handles Excel download of grade scale
 func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Grade scale Excel download requested",
@@ -280,62 +328,7 @@ func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore 
 	}
 
 	// Define grade styles with colors
-	gradeStyles := make(map[int]int)
-
-	style1, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#c6f6d5"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[1] = style1
-
-	style2, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#d4edda"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[2] = style2
-
-	style3, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#fff3cd"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[3] = style3
-
-	style4, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#ffe8cc"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[4] = style4
-
-	style5, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f8d7da"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[5] = style5
+	gradeStyles := createGradeStyles(f)
 
 	// Add data with styling
 	for i, bound := range data.GradeBounds {
@@ -359,8 +352,7 @@ func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore 
 	}
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel.xlsx")
+	setDownloadHeaders(w, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "notenschluessel.xlsx")
 
 	// Write the file to response
 	if err := f.Write(w); err != nil {
@@ -379,7 +371,7 @@ func HandleGradeScaleExcel(w http.ResponseWriter, r *http.Request, sessionStore 
 // HandleStudentResultsExcel handles Excel download of student results
 func HandleStudentResultsExcel(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Student results Excel download requested",
@@ -453,8 +445,7 @@ func HandleStudentResultsExcel(w http.ResponseWriter, r *http.Request, sessionSt
 	}
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	w.Header().Set("Content-Disposition", "attachment; filename=schueler_ergebnisse.xlsx")
+	setDownloadHeaders(w, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "schueler_ergebnisse.xlsx")
 
 	// Write the file to response
 	if err := f.Write(w); err != nil {
@@ -473,7 +464,7 @@ func HandleStudentResultsExcel(w http.ResponseWriter, r *http.Request, sessionSt
 // HandleCombinedExcel handles Excel download of combined results
 func HandleCombinedExcel(w http.ResponseWriter, r *http.Request, sessionStore *session.Store) {
 	start := time.Now()
-	sessionID := r.URL.Query().Get("id")
+	sessionID := getSessionIDFromCookie(r)
 	ip := security.GetClientIP(r)
 
 	logging.LogInfo("Combined Excel download requested",
@@ -498,62 +489,7 @@ func HandleCombinedExcel(w http.ResponseWriter, r *http.Request, sessionStore *s
 	}()
 
 	// Define grade styles
-	gradeStyles := make(map[int]int)
-
-	style1, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#c6f6d5"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[1] = style1
-
-	style2, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#d4edda"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[2] = style2
-
-	style3, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#fff3cd"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[3] = style3
-
-	style4, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#ffe8cc"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[4] = style4
-
-	style5, _ := f.NewStyle(&excelize.Style{
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"#f8d7da"}, Pattern: 1},
-		Border: []excelize.Border{
-			{Type: "left", Color: "#000000", Style: 1},
-			{Type: "top", Color: "#000000", Style: 1},
-			{Type: "right", Color: "#000000", Style: 1},
-			{Type: "bottom", Color: "#000000", Style: 1},
-		},
-	})
-	gradeStyles[5] = style5
+	gradeStyles := createGradeStyles(f)
 
 	// Header style
 	headerStyle, _ := f.NewStyle(&excelize.Style{
@@ -664,8 +600,7 @@ func HandleCombinedExcel(w http.ResponseWriter, r *http.Request, sessionStore *s
 	}
 
 	// Set headers for file download
-	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	w.Header().Set("Content-Disposition", "attachment; filename=notenschluessel_komplett.xlsx")
+	setDownloadHeaders(w, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "notenschluessel_komplett.xlsx")
 
 	// Write the file to response
 	if err := f.Write(w); err != nil {

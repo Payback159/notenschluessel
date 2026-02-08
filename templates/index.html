@@ -92,27 +92,9 @@
             background-color: #204278;
         }
 
-        .download-btn {
-            background-color: #38a169;
-            color: white;
-            text-decoration: none;
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 4px;
-            margin-top: 10px;
-            font-size: 14px;
-        }
-
-        .download-btn:hover {
-            background-color: #2f855a;
-        }
-
-        .excel-btn {
-            background-color: #2b579a;
-        }
-
-        .excel-btn:hover {
-            background-color: #204278;
+        .buttons-container {
+            margin-top: 15px;
+            margin-bottom: 10px;
         }
 
         table {
@@ -166,53 +148,6 @@
             color: #d69e2e;
             background-color: #faf089;
             border-left-color: #d69e2e;
-        }
-
-        /* Button styles - consolidated */
-        .btn {
-            color: white;
-            text-decoration: none;
-            display: inline-block;
-            padding: 10px 15px;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 5px 5px 5px 0;
-            transition: background-color 0.3s ease;
-        }
-
-        .btn-primary {
-            background-color: #4299e1;
-        }
-
-        .btn-primary:hover {
-            background-color: #3182ce;
-        }
-
-        .btn-success {
-            background-color: #38a169;
-            font-size: 14px;
-            padding: 6px 12px;
-        }
-
-        .btn-success:hover {
-            background-color: #2f855a;
-        }
-
-        .btn-excel {
-            background-color: #2b579a;
-            font-size: 14px;
-            padding: 6px 12px;
-        }
-
-        .btn-excel:hover {
-            background-color: #204278;
-        }
-
-        .buttons-container {
-            margin-top: 15px;
-            margin-bottom: 10px;
         }
 
         /* Grade-specific colors - consolidated system */
@@ -420,11 +355,11 @@
 
         <div class="buttons-container">
             {{if .HasStudents}}
-            <a href="/download/combined?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
+            <a href="/download/combined" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/combined-excel" class="btn btn-excel">Als Excel herunterladen</a>
             {{else}}
-            <a href="/download/grade-scale?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
-            <a href="/download/grade-scale-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
+            <a href="/download/grade-scale" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/grade-scale-excel" class="btn btn-excel">Als Excel herunterladen</a>
             {{end}}
         </div>
     </div>
@@ -455,8 +390,8 @@
         <h3>Notendurchschnitt: {{printf "%.2f" .AverageGrade}}</h3>
 
         <div class="buttons-container">
-            <a href="/download/combined?id={{.SessionID}}" class="btn btn-success">Als CSV herunterladen</a>
-            <a href="/download/combined-excel?id={{.SessionID}}" class="btn btn-excel">Als Excel herunterladen</a>
+            <a href="/download/combined" class="btn btn-success">Als CSV herunterladen</a>
+            <a href="/download/combined-excel" class="btn btn-excel">Als Excel herunterladen</a>
         </div>
     </div>
     {{end}}

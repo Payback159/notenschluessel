@@ -42,6 +42,12 @@ func CalculateGradeBounds(maxPoints int, minPoints, breakPointPercent float64) [
 	lowerBound3 = math.Round(lowerBound3/minPoints) * minPoints
 	lowerBound4 = math.Round(lowerBound4/minPoints) * minPoints
 
+	// Ensure bounds are non-negative and properly ordered
+	lowerBound4 = math.Max(0, lowerBound4)
+	lowerBound3 = math.Max(lowerBound4, lowerBound3)
+	lowerBound2 = math.Max(lowerBound3, lowerBound2)
+	lowerBound1 = math.Max(lowerBound2, lowerBound1)
+
 	gradeBounds := []models.GradeBound{
 		{Grade: 1, LowerBound: lowerBound1, UpperBound: float64(maxPoints)},
 		{Grade: 2, LowerBound: lowerBound2, UpperBound: lowerBound1 - minPoints},

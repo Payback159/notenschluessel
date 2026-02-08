@@ -50,8 +50,8 @@ func (s *Store) Set(id string, data models.PageData) {
 
 // Get retrieves session data if it exists and hasn't expired
 func (s *Store) Get(id string) (models.PageData, bool) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
 	sessionData, exists := s.sessions[id]
 	if !exists {
@@ -64,12 +64,7 @@ func (s *Store) Get(id string) (models.PageData, bool) {
 			"session_id", id,
 			"expired_at", sessionData.ExpiresAt.Format(time.RFC3339))
 
-		// Remove expired session (note: this requires upgrading to write lock)
-		s.mutex.RUnlock()
-		s.mutex.Lock()
 		delete(s.sessions, id)
-		s.mutex.Unlock()
-		s.mutex.RLock()
 
 		return models.PageData{}, false
 	}

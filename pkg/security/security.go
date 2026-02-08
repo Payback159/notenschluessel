@@ -6,23 +6,32 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/payback159/notenschluessel/pkg/logging"
 	"github.com/payback159/notenschluessel/pkg/models"
 	"golang.org/x/time/rate"
 )
 
-// RateLimiter manages rate limiting per IP address
+// ipLimiter wraps a rate limiter with a last-seen timestamp for cleanup
+type ipLimiter struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
+
+// RateLimiter manages rate limiting per IP address with automatic cleanup
 type RateLimiter struct {
-	limiters map[string]*rate.Limiter
+	limiters map[string]*ipLimiter
 	mutex    sync.RWMutex
 }
 
-// NewRateLimiter creates a new rate limiter
+// NewRateLimiter creates a new rate limiter with background cleanup
 func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{
-		limiters: make(map[string]*rate.Limiter),
+	rl := &RateLimiter{
+		limiters: make(map[string]*ipLimiter),
 	}
+	rl.startCleanup()
+	return rl
 }
 
 // GetLimiter returns a rate limiter for the given IP address
@@ -30,18 +39,53 @@ func (rl *RateLimiter) GetLimiter(ip string) *rate.Limiter {
 	rl.mutex.Lock()
 	defer rl.mutex.Unlock()
 
-	limiter, exists := rl.limiters[ip]
+	entry, exists := rl.limiters[ip]
 	if !exists {
-		limiter = rate.NewLimiter(rate.Limit(models.RateLimit)/60, models.RateBurst) // per second rate from per minute
-		rl.limiters[ip] = limiter
+		limiter := rate.NewLimiter(rate.Limit(models.RateLimit)/60, models.RateBurst)
+		rl.limiters[ip] = &ipLimiter{limiter: limiter, lastSeen: time.Now()}
 
 		logging.LogDebug("Created new rate limiter for IP",
 			"ip", ip,
 			"rate_per_minute", models.RateLimit,
 			"burst", models.RateBurst)
+
+		return limiter
 	}
 
-	return limiter
+	entry.lastSeen = time.Now()
+	return entry.limiter
+}
+
+// startCleanup runs a background goroutine to remove stale rate limiters
+func (rl *RateLimiter) startCleanup() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			rl.cleanupStale()
+		}
+	}()
+}
+
+// cleanupStale removes rate limiters not seen in the last 10 minutes
+func (rl *RateLimiter) cleanupStale() {
+	rl.mutex.Lock()
+	defer rl.mutex.Unlock()
+
+	threshold := time.Now().Add(-10 * time.Minute)
+	removed := 0
+	for ip, entry := range rl.limiters {
+		if entry.lastSeen.Before(threshold) {
+			delete(rl.limiters, ip)
+			removed++
+		}
+	}
+
+	if removed > 0 {
+		logging.LogInfo("Cleaned up stale rate limiters",
+			"removed", removed,
+			"remaining", len(rl.limiters))
+	}
 }
 
 // RateLimitMiddleware provides rate limiting functionality
@@ -65,28 +109,14 @@ func (rl *RateLimiter) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFu
 	}
 }
 
-// SecurityHeaders adds security headers to HTTP responses
-func SecurityHeaders(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Security headers
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'")
-
-		// Only set HSTS in production
-		if r.Header.Get("X-Forwarded-Proto") == "https" {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		}
-
-		next(w, r)
-	}
-}
-
 // GetClientIP extracts the real client IP from request headers
 func GetClientIP(r *http.Request) string {
-	// Check for forwarded IP in common headers
+	// Cloudflare sets this header with the verified client IP
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		return strings.TrimSpace(cfIP)
+	}
+
+	// Fallback: Check for forwarded IP in common headers
 	forwarded := r.Header.Get("X-Forwarded-For")
 	if forwarded != "" {
 		// X-Forwarded-For can contain multiple IPs, get the first one
@@ -140,14 +170,12 @@ func ValidateUpload(fileHeader *multipart.FileHeader) error {
 	return nil
 }
 
-// SanitizeName removes or replaces potentially dangerous characters from names
+// SanitizeName removes potentially dangerous characters from names.
+// Note: html/template auto-escapes output, so no manual HTML entity encoding needed.
 func SanitizeName(name string) string {
-	// Remove HTML tags and dangerous characters
+	// Remove HTML tag characters and control characters
 	name = strings.ReplaceAll(name, "<", "")
 	name = strings.ReplaceAll(name, ">", "")
-	name = strings.ReplaceAll(name, "&", "&amp;")
-	name = strings.ReplaceAll(name, "\"", "&quot;")
-	name = strings.ReplaceAll(name, "'", "&#39;")
 	name = strings.ReplaceAll(name, "\n", " ")
 	name = strings.ReplaceAll(name, "\r", " ")
 	name = strings.ReplaceAll(name, "\t", " ")

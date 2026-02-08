@@ -51,7 +51,7 @@ USER 10001:10001
 # Expose port
 EXPOSE 8080
 
-# Health check
+# Health check via /healthz endpoint (binary acts as its own health checker)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["/app/notenschluessel", "--health-check"]
 

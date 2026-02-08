@@ -197,6 +197,16 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 		h.SessionStore.Set(sessionID, pageData)
 		pageData.SessionID = sessionID
 
+		// Set session cookie (HttpOnly, SameSite=Strict) to prevent IDOR
+		http.SetCookie(w, &http.Cookie{
+			Name:     "session_id",
+			Value:    sessionID,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteStrictMode,
+			MaxAge:   models.SessionTimeout,
+		})
+
 		logging.LogDebug("Session created",
 			"session_id", sessionID,
 			"has_students", pageData.HasStudents,

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -16,19 +15,23 @@ import (
 )
 
 func main() {
+	// Health check mode: make a real HTTP request to the running server
+	if len(os.Args) > 1 && os.Args[1] == "--health-check" {
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Get("http://localhost:8080/healthz")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		fmt.Println("OK")
+		os.Exit(0)
+	}
+
 	// Initialize structured logging
 	logging.InitLogger()
 
 	logging.LogInfo("Starting Notenschluessel service",
 		"version", "v1.0.0",
 		"environment", os.Getenv("ENV"))
-
-	// Check for health check flag
-	if len(os.Args) > 1 && os.Args[1] == "--health-check" {
-		// Simple health check - just exit with 0 if we can start
-		fmt.Println("OK")
-		os.Exit(0)
-	}
 
 	// Load templates
 	templates := template.Must(template.ParseGlob("templates/*.html"))
@@ -90,6 +93,9 @@ func main() {
 					"form-action 'self'; "+
 					"frame-ancestors 'none'")
 
+			// Restrict browser features
+			w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+
 			next.ServeHTTP(w, r)
 		})
 	}
@@ -104,24 +110,31 @@ func main() {
 
 	mux.Handle("/", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(handler.HandleHome))))
 
-	mux.Handle("/download/grade-scale", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Health check endpoint (no CSRF/rate limiting needed)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	})
+
+	mux.Handle("/download/grade-scale", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleGradeScaleCSV(w, r, sessionStore)
 	}))))
-	mux.Handle("/download/student-results", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/download/student-results", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleStudentResultsCSV(w, r, sessionStore)
 	}))))
-	mux.Handle("/download/combined", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/download/combined", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleCombinedCSV(w, r, sessionStore)
 	}))))
 
-	// Excel download handlers with CSRF protection
-	mux.Handle("/download/grade-scale-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Excel download handlers with CSRF + rate limiting protection
+	mux.Handle("/download/grade-scale-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleGradeScaleExcel(w, r, sessionStore)
 	}))))
-	mux.Handle("/download/student-results-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/download/student-results-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleStudentResultsExcel(w, r, sessionStore)
 	}))))
-	mux.Handle("/download/combined-excel", securityHeaders(csrf.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/download/combined-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		downloads.HandleCombinedExcel(w, r, sessionStore)
 	}))))
 
@@ -141,7 +154,6 @@ func main() {
 
 	// Start server
 	logging.LogInfo("Server starting on port 8080")
-	fmt.Println("Server läuft auf http://localhost:8080")
 
 	server := &http.Server{
 		Addr:           ":8080",
@@ -158,5 +170,8 @@ func main() {
 		"idle_timeout", "60s",
 		"max_header_bytes", "1MB")
 
-	log.Fatal(server.ListenAndServe())
+	if err := server.ListenAndServe(); err != nil {
+		logging.LogCritical("Server failed to start", err)
+		os.Exit(1)
+	}
 }
