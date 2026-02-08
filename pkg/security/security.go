@@ -89,8 +89,8 @@ func (rl *RateLimiter) cleanupStale() {
 }
 
 // RateLimitMiddleware provides rate limiting functionality
-func (rl *RateLimiter) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (rl *RateLimiter) RateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := GetClientIP(r)
 		limiter := rl.GetLimiter(ip)
 
@@ -105,8 +105,8 @@ func (rl *RateLimiter) RateLimitMiddleware(next http.HandlerFunc) http.HandlerFu
 			return
 		}
 
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // GetClientIP extracts the real client IP from request headers

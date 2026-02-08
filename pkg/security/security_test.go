@@ -232,16 +232,16 @@ func TestRateLimiter_RateLimitMiddleware(t *testing.T) {
 	}
 
 	called := 0
-	handler := rl.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
+	handler := rl.RateLimitMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called++
-	})
+	}))
 
 	r, _ := http.NewRequest("GET", "/", nil)
 	r.RemoteAddr = "10.0.0.1:1234"
 
 	// First request should pass
 	w := &fakeResponseWriter{}
-	handler(w, r)
+	handler.ServeHTTP(w, r)
 
 	if called != 1 {
 		t.Errorf("handler should have been called once, got %d", called)

@@ -1,386 +1,113 @@
-# Notenschlüssel 📊
+# Notenschlüssel
 
-> A modern, secure Austrian grading scale calculator built with Go 1.25
+Ein simples Tool, für Lehrerinnen und Lehrer entwickelt. Notenschlüssel nimmt dir die Rechnerei ab. Erstelle schnell und unkompliziert Notenskalen für das österreichische Notensystem (1–5), auch wenn sie einen Knick haben.
+
+Kein Login, keine Datenbank, nichts wird gespeichert. Einfach Punkte eingeben, fertig.
 
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
-[![DSGVO Compliant](https://img.shields.io/badge/DSGVO-Compliant-green?style=flat-square)](https://gdpr-info.eu/)
-[![Security](https://img.shields.io/badge/Security-Native%20CSRF%20Protection-brightgreen?style=flat-square)](https://go.dev/blog/native-http-cors)
 
-## 🎯 Features
+## So geht's
 
-- **Austrian 1-6 Grading Scale Calculator** - Configure grade boundaries with flexible breakpoints
-- **Configurable Grade Breakpoints** - Set custom thresholds for each grade level
-- **CSV Import/Export** - Import student results from CSV, export grade scales and results
-- **Excel Export** - Generate professional Excel files with grade calculations
-- **Session-Based Workflow** - Secure session management for each calculation session
-- **Native CSRF Protection** - Go 1.25 built-in cross-origin protection (no external dependencies)
-- **Structured Logging** - JSON-formatted logs for easy monitoring and auditing
-- **Rate Limiting** - Per-IP rate limiting to prevent abuse (60 requests/minute default)
-- **DSGVO Compliant** - Privacy-focused design with no persistent data storage
-- **Docker Ready** - Multi-stage production build with minimal image size
+1. Maximale Punktzahl, Schrittweite und Knickpunkt eingeben
+2. Optional eine CSV-Datei mit Schülernamen und Punkten hochladen
+3. Ergebnisse ansehen, als CSV oder Excel runterladen
 
-## 🚀 Quick Start
+Das war's schon.
 
-### Prerequisites
-- Go 1.25+ or Docker
-- For development: `go mod download`
-
-### Local Development
+## Loslegen
 
 ```bash
-# Clone repository
-git clone https://github.com/Payback159/notenschluessel.git
-cd notenschluessel
-
-# Run directly
 go run main.go
+```
 
-# Or with Docker Compose
+Browser auf `http://localhost:8080` – fertig. Oder mit Docker:
+
+```bash
 docker compose up
 ```
 
-Visit `http://localhost:8080` in your browser.
-
-### Using Docker
-
-```bash
-# Build
-docker build -t notenschluessel:latest .
-
-# Run
-docker run -p 8080:8080 \
-  -e ENV=production \
-  -e HOSTNAME=notenschluessel.example.com \
-  notenschluessel:latest
-```
-
-## 📖 Usage Guide
-
-### Basic Workflow
-
-1. **Enter Parameters**
-   - **Maximale Punktzahl** (Max Points): Total points available (e.g., 100)
-   - **Punkteschrittweite** (Point Increment): Rounding increment (e.g., 0.5)
-   - **Knickpunkt in %** (Breakpoint %): Critical threshold for grade distribution (e.g., 50)
-
-2. **Import Student Data**
-   - Upload CSV file with format: `Name,Punkte`
-   - System automatically calculates grades for each student
-
-3. **View Results**
-   - Grade boundaries with point ranges
-   - Student grades (if imported)
-   - Average grade calculation
-
-4. **Export Results**
-   - Download grade scale as CSV or Excel
-   - Export student results with grades
-   - Generate combined report
-
-### CSV Import Format
+### CSV-Format
 
 ```csv
 Name,Punkte
 Max Mustermann,85.5
 Anna Schmidt,76.0
 Tom Weber,92.5
-Lisa Müller,68.0
 ```
 
-**Requirements:**
-- First row: column headers (`Name,Punkte`)
-- Decimal separator: period (`.`), not comma
-- Points must be ≤ max points
-- File size: max 10MB
-- Format: `.csv` (UTF-8 encoding recommended)
+Punkt als Dezimaltrennzeichen. Semikolon als Spaltentrenner geht auch. Max. 10 MB.
 
-## 🔒 Security Features
+## Unter der Haube
 
-### Native CSRF Protection (Go 1.25)
-Uses Go 1.25's built-in `http.NewCrossOriginProtection()`:
-- No external CSRF token libraries
-- Browser-native header validation (`Origin`, `Sec-Fetch-Site`)
-- Automatic cross-origin request blocking
-- Configurable trusted origins
+Geschrieben in Go 1.25, keine Frameworks, fast nur Stdlib. Ein einzelner HTTP-Service, der alles macht.
 
-### Security Headers
 ```
-X-Frame-Options: DENY
-X-Content-Type-Options: nosniff
-X-XSS-Protection: 1; mode=block
-Content-Security-Policy: default-src 'self'
-Strict-Transport-Security: max-age=31536000 (production only)
+notenschluessel/
+├── main.go                    # Server, Middleware, Routen
+├── pkg/
+│   ├── calculator/            # Notenberechnung, CSV-Parsing
+│   ├── downloads/             # CSV/Excel-Export
+│   ├── handlers/              # HTTP-Handler
+│   ├── logging/               # Strukturiertes Logging (slog/JSON)
+│   ├── models/                # Datentypen
+│   ├── security/              # Rate Limiting, IP-Extraktion
+│   └── session/               # In-Memory Session Store
+├── templates/
+├── dockerfile
+└── compose.yml
 ```
 
-### Rate Limiting
-- Per-IP rate limiting: 60 requests/minute (default)
-- Prevents brute force and DOS attacks
-- Configurable burst allowance
+Zwei externe Dependencies:
+- [excelize](https://github.com/xuri/excelize) für Excel-Export
+- [golang.org/x/time/rate](https://pkg.go.dev/golang.org/x/time/rate) für Rate Limiting
 
-### Data Privacy
-- ✅ No database - all data session-based
-- ✅ Sessions timeout after 24 hours
-- ✅ No persistent storage of student data
-- ✅ DSGVO compliant (GDPR-aligned)
-- ✅ All logs are structured for audit trails
+## Sicherheit
 
-## 🛠️ Configuration
+Auch wenn es nur ein Notenschlüssel ist – wenn man das Ding ins Netz stellt, sollte es ordentlich abgesichert sein:
 
-### Environment Variables
+- CSRF-Schutz über Go 1.25 nativ (`http.NewCrossOriginProtection()`)
+- Rate Limiting pro IP (10 req/min, Burst 20)
+- Security Headers (CSP, HSTS, X-Frame-Options, Permissions-Policy)
+- Session-Cookies: HttpOnly, SameSite=Strict
+- CSV-Injection-Schutz bei Exporten
+- Reverse-Proxy-Support (X-Forwarded-For, X-Real-IP)
+
+Keine Datenbank, keine Persistenz. Sessions leben im Memory und laufen nach 24h ab. Schülerdaten werden nur für die Berechnung verwendet und nie gespeichert. DSGVO-konform.
+
+## Konfiguration
+
+| Variable   | Werte                        | Beschreibung                        |
+| ---------- | ---------------------------- | ----------------------------------- |
+| `ENV`      | `production` / `development` | Steuert HSTS, CSRF-Origins, Logging |
+| `HOSTNAME` | z.B. `noten.example.com`     | Trusted Origin für CSRF             |
+
+Im Development geht `localhost:8080`, in Production nur der konfigurierte Hostname über HTTPS.
+
+## Tests
 
 ```bash
-# .env file
-ENV=production                           # 'production' or 'development'
-HOSTNAME=notenschluessel.example.com    # Domain for CSRF trusted origins (prod only)
+go test ./... -v        # alle Tests
+go test ./... -race     # mit Race-Detector
+go test ./... -cover    # mit Coverage
 ```
 
-### Development vs Production
+## Docker
 
-**Development Mode:**
-```bash
-ENV=development
-```
-- HTTP/HTTPS localhost allowed for CSRF
-- Relaxed CSP headers
-- Debug logging enabled
-- Hot reload compatible
-
-**Production Mode:**
-```bash
-ENV=production
-HOSTNAME=notenschluessel.example.com
-```
-- HTTPS only (HTTP redirect)
-- Strict CSRF origins (only configured hostname)
-- Enforced HSTS headers
-- Rate limiting active
-- Structured JSON logging for monitoring
-
-## 📊 Architecture
-
-### Request Flow
-
-```
-User Input (Form)
-       ↓
-Security Headers Middleware
-       ↓
-CSRF Protection (Go 1.25 Native)
-       ↓
-Rate Limiter (Per-IP)
-       ↓
-HTTP Handler (Main Logic)
-       ↓
-Grade Calculator
-       ↓
-Session Store (24h timeout)
-       ↓
-Template Rendering / Export
-       ↓
-Response (HTML / CSV / Excel)
-```
-
-### Package Structure
-
-- **`pkg/calculator/`** - Grade boundary calculations, CSV parsing
-- **`pkg/handlers/`** - HTTP request handlers, form processing
-- **`pkg/downloads/`** - CSV and Excel export generation
-- **`pkg/session/`** - Session store (in-memory)
-- **`pkg/security/`** - Rate limiting, IP extraction, input validation
-- **`pkg/logging/`** - Structured JSON logging with slog
-- **`pkg/models/`** - Data types and constants
-- **`templates/`** - HTML templates
-
-## 🧪 Testing
-
-### Manual Testing
+Multi-Stage Build nach `scratch`, ~15 MB Image, non-root User. Health Check über `/healthz`:
 
 ```bash
-# Start server
-go run main.go
-
-# Test form submission
-curl -X POST http://localhost:8080 \
-  -H "Origin: http://localhost:8080" \
-  -H "Sec-Fetch-Site: same-origin" \
-  -d "maxPoints=100&minPoints=0.5&breakPointPercent=50"
-
-# Test rate limiting
-for i in {1..70}; do curl http://localhost:8080; done
+./notenschluessel --health-check
 ```
 
-### Unit Tests
+Braucht kein curl im Container – der Binary prüft sich selbst.
 
-```bash
-# Run all tests
-go test ./...
+## Für Entwickler
 
-# With coverage
-go test ./... -cover
+- Middleware (Security Headers, CSRF, Rate Limiting) liegt einmal auf dem gesamten Router – neue Endpunkte sind automatisch geschützt
+- Logging über das `logging`-Package, nicht `fmt.Println`
+- Keine CSRF-Tokens in Formulare – Go 1.25 macht das über Browser-Header
 
-# Specific package
-go test ./pkg/calculator -v
-```
+## Lizenz
 
-## 🐳 Docker Deployment
-
-### Multi-Stage Build
-
-The Dockerfile uses a multi-stage build for minimal production image:
-- **Build Stage**: Full Go 1.25 environment, compile with security flags
-- **Runtime Stage**: Scratch image (~15MB), non-root user, CA certificates
-
-### Health Check
-
-```bash
-# Container health check
-./main --health-check
-```
-
-Returns `OK` (exit code 0) when healthy, suitable for Kubernetes/Docker probes.
-
-### Production Deployment Example
-
-```yaml
-# docker-compose.yml
-services:
-  notenschluessel:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      ENV: production
-      HOSTNAME: notenschluessel.example.com
-    healthcheck:
-      test: ["CMD", "./main", "--health-check"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-```
-
-## 📝 Development Guide
-
-### Adding New Features
-
-1. **New Calculation:** Add logic to `pkg/calculator/calculator.go`
-2. **New Export Format:** Add handler in `pkg/downloads/`, register route in `main.go`
-3. **New Endpoint:** Always wrap with middleware: `securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(...)))`
-4. **Store Session Data:** Use `sessionStore.SetData(sessionID, key, value)`
-
-### Code Conventions
-
-**Structured Logging** (required for all operations):
-```go
-// ✅ DO
-logging.LogInfo("Calculation complete", 
-    "students", len(students),
-    "max_points", maxPoints)
-
-// ❌ DON'T
-fmt.Println("Calculation complete")
-```
-
-**Error Handling:**
-```go
-if err != nil {
-    logging.LogError("Failed to parse CSV", err,
-        "file_size", fileSize,
-        "ip", ip)
-    // Return user-friendly error
-    return fmt.Errorf("CSV parsing failed")
-}
-```
-
-**Handler Pattern:**
-```go
-func (h *Handler) HandleCustom(w http.ResponseWriter, r *http.Request) {
-    // 1. Extract request data
-    // 2. Validate input
-    // 3. Log operation
-    // 4. Process with business logic
-    // 5. Store in session
-    // 6. Render response
-}
-```
-
-## 🔧 Troubleshooting
-
-### Issue: "CSRF protection is preventing my request"
-
-**Solution:** Ensure your client includes required headers:
-```bash
-curl -X POST \
-  -H "Origin: https://notenschluessel.example.com" \
-  -H "Sec-Fetch-Site: same-origin" \
-  https://notenschluessel.example.com
-```
-
-### Issue: Rate limit exceeded (HTTP 429)
-
-**Solution:** Check your request frequency:
-- Default: 60 requests/minute per IP
-- Wait a minute or restart your request loop
-
-### Issue: Session data missing
-
-**Sessions are per-request** - data stored in one session isn't available in another. This is by design for privacy.
-
-### Issue: Excel export not working
-
-Ensure ExcelIze dependency is installed:
-```bash
-go get -u github.com/xuri/excelize/v2
-```
-
-## 📊 Performance
-
-- **Startup Time:** ~50ms
-- **Response Time:** <100ms (grade calculation)
-- **Memory Usage:** ~20MB baseline + session storage
-- **Concurrent Users:** Tested with 1000+ concurrent requests
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Setup
-
-```bash
-# Fork and clone
-git clone https://github.com/YOUR_USERNAME/notenschluessel.git
-cd notenschluessel
-
-# Create feature branch
-git checkout -b feature/amazing-feature
-
-# Make changes, commit, push
-git push origin feature/amazing-feature
-
-# Create Pull Request on GitHub
-```
-
-## 🐛 Bug Reports
-
-Found a bug? Please create an issue with:
-- Clear description of the problem
-- Steps to reproduce
-- Expected vs actual behavior
-- Your environment (OS, Go version, etc.)
-
-## 📧 Support
-
-For questions or support, please open a GitHub issue or contact the maintainers.
-
-## 🙏 Acknowledgments
-
-- Built with Go 1.25 stdlib
-- Uses [ExcelIze](https://github.com/xuri/excelize) for Excel export
-- Inspired by Austrian educational standards
-
----
-
-**Made with ❤️ for Austrian teachers and educators**
-
-Last updated: 2025-11-18
+Apache 2.0 – siehe [LICENSE](LICENSE).

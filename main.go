@@ -105,40 +105,39 @@ func main() {
 	handler := handlers.NewHandler(templates, sessionStore)
 	logging.LogInfo("HTTP handlers initialized")
 
-	// Create multiplexer
+	// Application routes (all protected by the middleware stack below)
+	appMux := http.NewServeMux()
+	appMux.HandleFunc("/", handler.HandleHome)
+	appMux.HandleFunc("/download/grade-scale", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleGradeScaleCSV(w, r, sessionStore)
+	})
+	appMux.HandleFunc("/download/student-results", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleStudentResultsCSV(w, r, sessionStore)
+	})
+	appMux.HandleFunc("/download/combined", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleCombinedCSV(w, r, sessionStore)
+	})
+	appMux.HandleFunc("/download/grade-scale-excel", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleGradeScaleExcel(w, r, sessionStore)
+	})
+	appMux.HandleFunc("/download/student-results-excel", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleStudentResultsExcel(w, r, sessionStore)
+	})
+	appMux.HandleFunc("/download/combined-excel", func(w http.ResponseWriter, r *http.Request) {
+		downloads.HandleCombinedExcel(w, r, sessionStore)
+	})
+
+	// Apply middleware stack once to all app routes
+	protectedApp := securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(appMux)))
+
+	// Top-level mux: healthz bypasses middleware, everything else goes through
 	mux := http.NewServeMux()
-
-	mux.Handle("/", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(handler.HandleHome))))
-
-	// Health check endpoint (no CSRF/rate limiting needed)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, "OK")
 	})
-
-	mux.Handle("/download/grade-scale", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleGradeScaleCSV(w, r, sessionStore)
-	}))))
-	mux.Handle("/download/student-results", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleStudentResultsCSV(w, r, sessionStore)
-	}))))
-	mux.Handle("/download/combined", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleCombinedCSV(w, r, sessionStore)
-	}))))
-
-	// Excel download handlers with CSRF + rate limiting protection
-	mux.Handle("/download/grade-scale-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleGradeScaleExcel(w, r, sessionStore)
-	}))))
-	mux.Handle("/download/student-results-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleStudentResultsExcel(w, r, sessionStore)
-	}))))
-	mux.Handle("/download/combined-excel", securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		downloads.HandleCombinedExcel(w, r, sessionStore)
-	}))))
-
-	protectedHandler := mux
+	mux.Handle("/", protectedApp)
 
 	// Start periodic system statistics logging
 	go func() {
@@ -157,7 +156,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:           ":8080",
-		Handler:        protectedHandler,
+		Handler:        mux,
 		ReadTimeout:    15 * time.Second,
 		WriteTimeout:   15 * time.Second,
 		IdleTimeout:    60 * time.Second,
