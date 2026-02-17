@@ -1,6 +1,6 @@
 module github.com/payback159/notenschluessel
 
-go 1.25
+go 1.26
 
 require (
 	github.com/xuri/excelize/v2 v2.10.0
