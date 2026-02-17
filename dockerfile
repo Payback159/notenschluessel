@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS build-env
+FROM golang:1.26-alpine AS build-env
 
 # Install security updates and ca-certificates
 RUN apk update && apk add --no-cache ca-certificates tzdata
