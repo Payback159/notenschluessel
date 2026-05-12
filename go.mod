@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/xuri/excelize/v2 v2.10.1
-	golang.org/x/time v0.14.0
+	golang.org/x/time v0.15.0
 )
 
 require (
