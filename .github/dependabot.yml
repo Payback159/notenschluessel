@@ -5,13 +5,13 @@
 
 version: 2
 updates:
-  # Go modules
-  - package-ecosystem: "gomod"
+  # npm dependencies
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     commit-message:
-      prefix: "deps(go)"
+      prefix: "deps(npm)"
 
   # Docker base images
   - package-ecosystem: "docker"

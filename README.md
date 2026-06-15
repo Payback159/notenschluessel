@@ -2,30 +2,24 @@
 
 Ein simples Tool, für Lehrerinnen und Lehrer entwickelt. Notenschlüssel nimmt dir die Rechnerei ab. Erstelle schnell und unkompliziert Notenskalen für das österreichische Notensystem (1–5), auch wenn sie einen Knick haben.
 
-Kein Login, keine Datenbank, nichts wird gespeichert. Einfach Punkte eingeben, fertig.
+Kein Login, keine Datenbank, nichts wird gespeichert. Die Berechnung läuft vollständig im Browser.
 
-[![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
 
 ## So geht's
 
 1. Maximale Punktzahl, Schrittweite und Knickpunkt eingeben
-2. Optional eine CSV-Datei mit Schülernamen und Punkten hochladen
-3. Ergebnisse ansehen, als CSV oder Excel runterladen
-
-Das war's schon.
+2. Schülerdaten optional via CSV oder manueller Tabelle erfassen
+3. Ergebnisse ansehen und als CSV/Excel exportieren
 
 ## Loslegen
 
 ```bash
-go run main.go
+npm install
+npm run dev
 ```
 
-Browser auf `http://localhost:8080` – fertig. Oder mit Docker:
-
-```bash
-docker compose up
-```
+Browser auf http://localhost:5173 – fertig.
 
 ### CSV-Format
 
@@ -40,73 +34,51 @@ Punkt als Dezimaltrennzeichen. Semikolon als Spaltentrenner geht auch. Max. 10 M
 
 ## Unter der Haube
 
-Geschrieben in Go 1.25, keine Frameworks, fast nur Stdlib. Ein einzelner HTTP-Service, der alles macht.
+Frontend: Vanilla TypeScript (Vite).
+Server: nginx:alpine liefert den fertigen Build aus.
 
-```
+```text
 notenschluessel/
-├── main.go                    # Server, Middleware, Routen
-├── pkg/
-│   ├── calculator/            # Notenberechnung, CSV-Parsing
-│   ├── downloads/             # CSV/Excel-Export
-│   ├── handlers/              # HTTP-Handler
-│   ├── logging/               # Strukturiertes Logging (slog/JSON)
-│   ├── models/                # Datentypen
-│   ├── security/              # Rate Limiting, IP-Extraktion
-│   └── session/               # In-Memory Session Store
-├── templates/
-├── dockerfile
+├── nginx.conf                 # nginx-Konfiguration (Security-Header, Healthcheck)
+├── style.css                  # Zentrales CSS-Theme
+├── index.html                 # App-Einstieg
+├── src/                       # TypeScript App
+│   ├── app.ts                 # DOM-Controller
+│   ├── constants.ts           # Limits, Notenfarben
+│   ├── core/                  # Berechnung, Validierung
+│   ├── parsers/               # CSV- und Manualparser
+│   ├── export/                # CSV- und Excel-Export
+│   └── ui/                    # Workflow-Orchestrierung
+├── tests/                     # Vitest Unit/Integrationstests
+├── dockerfile                 # node:24-alpine → nginx:alpine
 └── compose.yml
 ```
 
-Zwei externe Dependencies:
-- [excelize](https://github.com/xuri/excelize) für Excel-Export
-- [golang.org/x/time/rate](https://pkg.go.dev/golang.org/x/time/rate) für Rate Limiting
+Dependencies:
+- [xlsx](https://www.npmjs.com/package/xlsx) – Excel-Export direkt im Browser
 
 ## Sicherheit
 
-Auch wenn es nur ein Notenschlüssel ist – wenn man das Ding ins Netz stellt, sollte es ordentlich abgesichert sein:
-
-- CSRF-Schutz über Go 1.25 nativ (`http.NewCrossOriginProtection()`)
-- Rate Limiting pro IP (10 req/min, Burst 20)
-- Security Headers (CSP, HSTS, X-Frame-Options, Permissions-Policy)
-- Session-Cookies: HttpOnly, SameSite=Strict
+- Keine serverseitige Verarbeitung von Schülerdaten
+- Security-Header via nginx (CSP, HSTS, X-Frame-Options, Permissions-Policy)
 - CSV-Injection-Schutz bei Exporten
-- Reverse-Proxy-Support (X-Forwarded-For, X-Real-IP)
-
-Keine Datenbank, keine Persistenz. Sessions leben im Memory und laufen nach 24h ab. Schülerdaten werden nur für die Berechnung verwendet und nie gespeichert. DSGVO-konform.
-
-## Konfiguration
-
-| Variable   | Werte                        | Beschreibung                        |
-| ---------- | ---------------------------- | ----------------------------------- |
-| `ENV`      | `production` / `development` | Steuert HSTS, CSRF-Origins, Logging |
-| `HOSTNAME` | z.B. `noten.example.com`     | Trusted Origin für CSRF             |
-
-Im Development geht `localhost:8080`, in Production nur der konfigurierte Hostname über HTTPS.
+- Eingaben und Ergebnisse können in der App jederzeit zurückgesetzt werden
 
 ## Tests
 
 ```bash
-go test ./... -v        # alle Tests
-go test ./... -race     # mit Race-Detector
-go test ./... -cover    # mit Coverage
+npm run test           # Unit + Integrationstests (Vitest)
+npm run type-check     # TypeScript-Typen prüfen
 ```
 
 ## Docker
 
-Multi-Stage Build nach `scratch`, ~15 MB Image, non-root User. Health Check über `/healthz`:
-
 ```bash
-./notenschluessel --health-check
+docker compose up --build
+curl http://localhost:8080/healthz  # -> "OK"
 ```
 
-Braucht kein curl im Container – der Binary prüft sich selbst.
-
-## Für Entwickler
-
-- Middleware (Security Headers, CSRF, Rate Limiting) liegt einmal auf dem gesamten Router – neue Endpunkte sind automatisch geschützt
-- Logging über das `logging`-Package, nicht `fmt.Println`
-- Keine CSRF-Tokens in Formulare – Go 1.25 macht das über Browser-Header
+Multi-Stage Build: node:24-alpine baut das Frontend, nginx:alpine liefert es aus.
 
 ## Lizenz
 
