@@ -5,262 +5,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" />
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" />
     <title>Notenschlüssel</title>
-    <style>
-        :root {
-            --bg: #f3f5ef;
-            --bg-2: #e7ede0;
-            --card: #ffffff;
-            --text: #22251f;
-            --muted: #5a6154;
-            --line: #d1d9c8;
-            --accent: #0b6e4f;
-            --accent-2: #f4a259;
-            --error-bg: #fdecea;
-            --error-text: #7a1f2b;
-            --success-bg: #e8f7ef;
-            --success-text: #145a3d;
-            --shadow: 0 12px 30px rgba(31, 46, 27, 0.12);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-            color: var(--text);
-            background:
-                radial-gradient(80rem 40rem at -10% -20%, rgba(11, 110, 79, 0.22), transparent 60%),
-                radial-gradient(70rem 32rem at 110% 0%, rgba(244, 162, 89, 0.26), transparent 55%),
-                linear-gradient(160deg, var(--bg), var(--bg-2));
-            padding: 28px 16px 60px;
-            line-height: 1.45;
-            animation: fadeIn 0.5s ease-out;
-        }
-
-        main {
-            max-width: 1060px;
-            margin: 0 auto;
-        }
-
-        h1,
-        h2 {
-            margin: 0 0 10px;
-            line-height: 1.2;
-            letter-spacing: 0.01em;
-        }
-
-        .hero {
-            margin-bottom: 18px;
-        }
-
-        .hero p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 1.03rem;
-        }
-
-        .card {
-            background: color-mix(in srgb, var(--card) 88%, #f4f7ee 12%);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 18px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow);
-            animation: slideUp 0.45s ease-out;
-        }
-
-        .grid {
-            display: grid;
-            gap: 12px;
-        }
-
-        label {
-            display: grid;
-            gap: 6px;
-            color: #263125;
-            font-size: 0.98rem;
-        }
-
-        fieldset {
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            padding: 10px 12px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 14px;
-        }
-
-        legend {
-            padding: 0 6px;
-            color: #374034;
-            font-size: 0.95rem;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin-top: 8px;
-            overflow: hidden;
-            border-radius: 12px;
-            border: 1px solid var(--line);
-            background: #fff;
-        }
-
-        th,
-        td {
-            border-bottom: 1px solid #e9eee2;
-            padding: 9px 10px;
-            text-align: left;
-        }
-
-        tr:last-child td {
-            border-bottom: none;
-        }
-
-        th {
-            background: #edf4e9;
-            color: #243121;
-            font-weight: 600;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        .actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .message {
-            padding: 10px 12px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            border: 1px solid transparent;
-        }
-
-        .error {
-            background: var(--error-bg);
-            color: var(--error-text);
-            border-color: #f7c2cb;
-        }
-
-        .success {
-            background: var(--success-bg);
-            color: var(--success-text);
-            border-color: #b6e8ce;
-        }
-
-        button,
-        .btn-link {
-            cursor: pointer;
-            border: none;
-            border-radius: 999px;
-            padding: 9px 16px;
-            font: inherit;
-            font-size: 0.95rem;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-        }
-
-        button {
-            background: var(--accent);
-            color: #fff;
-            box-shadow: 0 6px 14px rgba(11, 110, 79, 0.22);
-        }
-
-        button:hover,
-        .btn-link:hover {
-            transform: translateY(-1px);
-        }
-
-        button:active,
-        .btn-link:active {
-            transform: translateY(0);
-        }
-
-        #deleteDataBtn,
-        .remove-row {
-            background: #fff;
-            color: #234030;
-            border: 1px solid var(--line);
-            box-shadow: none;
-        }
-
-        .btn-link {
-            background: var(--accent-2);
-            color: #1f160c;
-            font-weight: 600;
-        }
-
-        input[type="text"],
-        input[type="number"],
-        input[type="file"] {
-            width: 100%;
-            box-sizing: border-box;
-            padding: 9px 11px;
-            border: 1px solid #c9d4be;
-            border-radius: 10px;
-            font: inherit;
-            background: #fff;
-        }
-
-        input:focus-visible,
-        button:focus-visible,
-        a:focus-visible {
-            outline: 2px solid #0f7f5b;
-            outline-offset: 2px;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(6px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @media (max-width: 720px) {
-            body {
-                padding: 18px 10px 40px;
-            }
-
-            .card {
-                padding: 14px;
-                border-radius: 14px;
-            }
-
-            th,
-            td {
-                padding: 7px 8px;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
@@ -318,8 +65,8 @@
 
                 <div class="actions">
                     <button type="submit">Berechnen</button>
-                    <button id="deleteDataBtn" type="button">Lokale Daten löschen</button>
-                    <a href="/privacy.html" class="btn-link">Datenschutz</a>
+                    <button id="resetBtn" type="button">Eingaben zurücksetzen</button>
+                    <button id="privacyBtn" type="button" class="btn-link">Datenschutz</button>
                 </div>
             </form>
         </div>
@@ -362,6 +109,16 @@
             </div>
         </div>
     </main>
+
+    <dialog id="privacyModal" class="modal">
+        <div class="modal-content">
+            <button id="privacyCloseBtn" class="modal-close" type="button" aria-label="Schließen">×</button>
+            <h2>Datenschutz</h2>
+            <p>Diese Version verarbeitet Schülerdaten ausschließlich im Browser.</p>
+            <p>Es werden keine Schülerdaten an den Server übertragen oder dort gespeichert.</p>
+            <p>Du kannst alle Eingaben und Ergebnisse jederzeit mit "Eingaben zurücksetzen" entfernen.</p>
+        </div>
+    </dialog>
 
     <script type="module" src="/src/app.ts"></script>
 </body>

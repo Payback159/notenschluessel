@@ -53,4 +53,14 @@ describe("export modules", () => {
         expect(b.length).toBeGreaterThan(100);
         expect(c.length).toBeGreaterThan(100);
     });
+
+    it("applies grade colors to excel cells", () => {
+        const wb = buildGradeScaleWorkbook(bounds);
+        const sheet = wb.Sheets["Notenskala"]!;
+        // Note 1 sits in row 2 (header in row 1); the whole row must be colored
+        for (const col of ["A", "B", "C"]) {
+            const cell = sheet[`${col}2`] as { s?: { fill?: { fgColor?: { rgb?: string } } } };
+            expect(cell.s?.fill?.fgColor?.rgb).toBe("D4EDDA");
+        }
+    });
 });

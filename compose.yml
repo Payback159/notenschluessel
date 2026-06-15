@@ -5,31 +5,33 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
-    environment:
-      - ENV=production
-      - STATIC_DIR=/app/dist
-
     security_opt:
       - no-new-privileges:true
     read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
     cap_drop:
       - ALL
+    cap_add:
+      - NET_BIND_SERVICE
 
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
           memory: 64M
-          cpus: '0.1'
+          cpus: '0.25'
+        reservations:
+          memory: 16M
+          cpus: '0.05'
 
     healthcheck:
-      test: ["CMD", "/app/notenschluessel", "--health-check"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
     logging:
       driver: "json-file"

@@ -19,6 +19,7 @@ interface AppState {
     breakPointPercent: number;
     gradeBounds: ReturnType<typeof runCalculationWorkflow>["gradeBounds"];
     students: ReturnType<typeof runCalculationWorkflow>["students"];
+    averageGrade: number;
 }
 
 const state: AppState = {
@@ -26,7 +27,8 @@ const state: AppState = {
     minPoints: 0.5,
     breakPointPercent: 50,
     gradeBounds: [],
-    students: []
+    students: [],
+    averageGrade: 0
 };
 
 function getById<T extends HTMLElement>(id: string): T {
@@ -95,6 +97,7 @@ function renderResults(): void {
     scaleBody.innerHTML = "";
     for (const bound of state.gradeBounds) {
         const tr = document.createElement("tr");
+        tr.className = `grade-${bound.grade}`;
         tr.innerHTML = `<td>${bound.grade}</td><td>${bound.lowerBound.toFixed(1)} - ${bound.upperBound.toFixed(1)}</td>`;
         scaleBody.appendChild(tr);
     }
@@ -102,24 +105,36 @@ function renderResults(): void {
     studentsBody.innerHTML = "";
     for (const student of state.students) {
         const tr = document.createElement("tr");
+        if (student.grade) {
+            tr.className = `grade-${student.grade}`;
+        }
         tr.innerHTML = `<td>${student.name}</td><td>${student.points.toFixed(1)}</td><td>${student.grade ?? ""}</td>`;
         studentsBody.appendChild(tr);
     }
 
     average.textContent = state.students.length > 0
-        ? `Notendurchschnitt: ${(state.students.reduce((sum, s) => sum + (s.grade ?? 0), 0) / state.students.length).toFixed(2)}`
+        ? `Notendurchschnitt: ${state.averageGrade.toFixed(2)}`
         : "";
 
     scaleCard.classList.toggle("hidden", state.gradeBounds.length === 0);
     studentsCard.classList.toggle("hidden", state.students.length === 0);
 }
 
-function clearLocalData(): void {
+function resetInputs(): void {
     state.gradeBounds = [];
     state.students = [];
+    state.averageGrade = 0;
     sessionStorage.removeItem("notenschluessel:lastState");
+
+    // Auch die eingegebenen Schülerdaten aus den Formularfeldern entfernen,
+    // nicht nur den gespeicherten Zustand.
+    getById<HTMLInputElement>("csvFile").value = "";
+    const rows = getById<HTMLTableSectionElement>("manualRows");
+    rows.innerHTML = "";
+    addManualRow();
+
     renderResults();
-    showMessage("success", "Lokale Daten wurden gelöscht.");
+    showMessage("success", "Eingaben und Ergebnisse wurden zurückgesetzt.");
 }
 
 async function handleSubmit(event: SubmitEvent): Promise<void> {
@@ -152,6 +167,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
         showMessage("error", result.errors.join(" "));
         state.gradeBounds = [];
         state.students = [];
+        state.averageGrade = 0;
         renderResults();
         return;
     }
@@ -161,6 +177,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     state.breakPointPercent = breakPointPercent;
     state.gradeBounds = result.gradeBounds;
     state.students = result.students;
+    state.averageGrade = result.averageGrade;
 
     sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
     renderResults();
@@ -233,6 +250,27 @@ function setupExports(): void {
     });
 }
 
+function setupPrivacyModal(): void {
+    const modal = document.getElementById("privacyModal") as HTMLDialogElement | null;
+    if (!modal) {
+        return;
+    }
+
+    getById<HTMLButtonElement>("privacyBtn").addEventListener("click", () => {
+        modal.showModal();
+    });
+
+    getById<HTMLButtonElement>("privacyCloseBtn").addEventListener("click", () => {
+        modal.close();
+    });
+
+    modal.addEventListener("click", (event) => {
+        if (event.target === modal) {
+            modal.close();
+        }
+    });
+}
+
 function restoreState(): void {
     const raw = sessionStorage.getItem("notenschluessel:lastState");
     if (!raw) {
@@ -246,6 +284,7 @@ function restoreState(): void {
         state.breakPointPercent = restored.breakPointPercent;
         state.gradeBounds = restored.gradeBounds;
         state.students = restored.students;
+        state.averageGrade = restored.averageGrade ?? 0;
 
         getById<HTMLInputElement>("maxPoints").value = String(restored.maxPoints);
         getById<HTMLInputElement>("minPoints").value = String(restored.minPoints);
@@ -261,10 +300,11 @@ function setupApp(): void {
     addManualRow();
     setupInputModeToggle();
     setupExports();
+    setupPrivacyModal();
     restoreState();
 
     getById<HTMLButtonElement>("addRowBtn").addEventListener("click", () => addManualRow());
-    getById<HTMLButtonElement>("deleteDataBtn").addEventListener("click", clearLocalData);
+    getById<HTMLButtonElement>("resetBtn").addEventListener("click", resetInputs);
     getById<HTMLFormElement>("calcForm").addEventListener("submit", (event) => {
         void handleSubmit(event as SubmitEvent);
     });

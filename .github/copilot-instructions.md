@@ -2,235 +2,204 @@
 
 ## Project Overview
 
-**Notenschlüssel** is an Austrian grading scale calculator built in **Go 1.26** with a focus on security, structured logging, and educational use (DSGVO compliant). It calculates grade boundaries using a Austrian 1-5 grading scale with configurable breakpoints, supports CSV and manual student input, and includes CSV/Excel export capabilities.
+**Notenschlüssel** ist ein österreichischer Notenschlüssel-Rechner als **client-only TypeScript/Vite App** (DSGVO-konform). Die gesamte Berechnung, CSV-Verarbeitung und Export-Logik läuft im Browser. Der Server liefert nur statische Assets aus.
 
 ### Architecture
 
-- **Monolithic HTTP service** (Go 1.26 stdlib only)
-- **Core layers**: handlers → calculator → models, with security/logging/session support
-- **Middleware stack**: Security headers → CSRF protection (native Go 1.25) → Rate limiting → Handler
-- **Data flow**: Form input → Calculation → Session storage → Template rendering or export
+- **Frontend**: Vanilla TypeScript, gebaut mit Vite, keine Frameworks
+- **Server**: `nginx:alpine` liefert statische Assets aus `dist/`
+- **Keine serverseitige Verarbeitung von Schülerdaten**
+- **Data flow**: DOM-Formular → TS-Core-Logik → sessionStorage → Client-Export
+
+## Technology Stack
+
+### Frontend (in `src/`)
+- **TypeScript** (strict mode) mit Vite als Build-Tool
+- **Vitest** für Unit- und Integrationstests
+- **xlsx-js-style** für Excel-Export direkt im Browser (Fork von SheetJS mit Zell-Styling – das normale `xlsx`-Community-Paket schreibt keine Styles)
+- Kein CSS-Framework – zentrales Stylesheet in `style.css`
+
+### Server
+- **nginx:alpine** – liefert `dist/`, setzt Security-Header, stellt `/healthz` bereit
+- Konfiguration in `nginx.conf`
+- Kein Backend-Code, keine Routen für Nutzdaten
 
 ## Critical Patterns & Conventions
 
-### Go 1.25+ Native CSRF Protection
+### Client-only Datenverarbeitung
 
-⚠️ **Key architectural decision**: Uses `http.NewCrossOriginProtection()` instead of external libraries.
+Schülerdaten verlassen nie den Browser:
 
-- CSRF middleware wraps all handlers in `main.go` (line 106-120)
-- Configure trusted origins at startup: `csrf.AddTrustedOrigin("https://hostname")`
-- Env-aware configuration: production uses HTTPS only, dev allows localhost variants
-- **Never add CSRF tokens to forms** - browser headers (`Sec-Fetch-Site`, `Origin`) are validated instead
-- Wrapping pattern: `csrf.Handler(middleware(handlerFunc))`
+```ts
+// ✅ DO: Alles läuft im Browser
+const result = runCalculationWorkflow({ maxPoints, minPoints, breakPointPercent, inputMode, csvContent, manualEntries });
 
-### Structured Logging (slog, JSON output)
-
-All logging must use the `logging` package, never `fmt.Print` for application events:
-
-```go
-// ✅ DO: Structured logging with key-value pairs
-logging.LogInfo("User submitted form",
-    "session_id", sessionID,
-    "max_points", maxPoints,
-    "students_count", len(students))
-
-// ❌ DON'T: Printf debugging
-fmt.Printf("maxPoints: %d\n", maxPoints)
+// ❌ DON'T: Kein POST mit Schülerdaten an Server
+fetch("/calculate", { method: "POST", body: JSON.stringify(students) });
 ```
 
-Key functions:
+### Session-Speicherung (Client-side)
 
-- `logging.LogInfo(msg string, args ...any)` - informational events
-- `logging.LogError(msg string, err error, args ...any)` - errors with stack context
-- `logging.LogDebug(msg string, args ...any)` - low-level details (only when debugging)
-- `logging.LogWarn(msg string, args ...any)` - warnings
-- `logging.LogCritical(msg string, err error, args ...any)` - critical failures
-- `logging.LogPerformance(operation string, duration time.Duration, args ...any)` - performance metrics
-- `logging.LogSecurityEvent(msg string, severity string, args ...any)` - security-relevant (rate limits, auth failures)
-- `logging.LogSystemStats()` - called every 10 minutes for resource usage
+Zustand wird nur im Browser gespeichert:
 
-### Session Management
+```ts
+// Speichern
+sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
 
-Sessions store grade calculations and file uploads per user (see `pkg/session/`):
+// Laden
+const raw = sessionStorage.getItem("notenschluessel:lastState");
 
-```go
-// Store data
-sessionStore.Set(sessionID, pageData)
-
-// Retrieve and use
-data, ok := sessionStore.Get(sessionID)
+// Löschen (DSGVO: Nutzer kann selbst löschen)
+sessionStorage.removeItem("notenschluessel:lastState");
 ```
 
-- SessionID passed to all templates and handlers for audit trails
-- Session timeout: 24 hours (configurable in models)
-- No external session backend - in-memory only (stateless for horizontal scaling in future)
+### Security-Header (nginx.conf)
 
-### Security Middleware Stack (main.go:65-103)
+Alle Header via `add_header` in `nginx.conf`:
 
-Applied in order: Security headers → CSRF → Rate limiting → Handler
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'`
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
 
-**Security headers set**:
+Wichtig: In nested `location`-Blöcken müssen `add_header`-Direktiven wiederholt werden (nginx erbt sie nicht).
 
-- `X-Frame-Options: DENY` - prevent clickjacking
-- `Content-Security-Policy: default-src 'self'` - strict CSP with unsafe-inline for styles/scripts only (educational tool)
-- `Strict-Transport-Security: max-age=31536000` (production only)
-- `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`
+### Input-Modus (CSV vs. Manuell)
 
-**Rate limiting** (per IP, 10 requests/minute, burst 20):
+Beim Umschalten zwischen Modi werden die Daten des anderen Modus geleert:
 
-```go
-rateLimiter := security.NewRateLimiter() // Create once in main
-// Wrapped as middleware: rateLimiter.RateLimitMiddleware(handler)
+```ts
+// In setupInputModeToggle():
+if (mode === "csv") {
+    // Manuelle Zeilen leeren, dann addManualRow()
+} else {
+    // CSV FileInput leeren: getById<HTMLInputElement>("csvFile").value = "";
+}
 ```
 
-### Form Handling & Validation
+### Eingabevalidierung (Client-side, `src/core/validation.ts`)
 
-- All POST forms lack CSRF tokens (native Go 1.25 protection)
-- Input validation in `handlers.HandleHome()`:
-  - `maxPoints`: required, positive integer
-  - `minPoints`: required, positive float
-  - `breakPointPercent`: 1-99 range
-  - `inputMode`: `csv` or `manual`
-  - Student input: CSV upload or manual table entries (mutually exclusive)
-  - CSV file (optional in CSV mode): max 10MB, validated CSV structure
-  - Empty student list is allowed (grade scale only)
-  - Degenerate scale combinations are rejected via `calculator.ValidateGradeBounds()`
-- Validation errors returned as `Message{Type: "error", Text: "..."}` in template data
-- ✅ Safe template rendering via `h.executeTemplateSafe()` to catch panics
+- `maxPoints`: Pflicht, positive Ganzzahl, max 1000
+- `minPoints`: Pflicht, positive Zahl, ≤ maxPoints
+- `breakPointPercent`: 1–99
+- CSV und Manuell sind gegenseitig ausschließend
+- Degenerate Skalen werden via `validateGradeBounds()` abgefangen
+- Validierungsfehler: `showMessage("error", ...)` in der UI
 
-### File Upload Processing
+### Notenfarben (Single Source of Truth)
 
-Located in `pkg/calculator/ParseCSVFile()`:
+Alle Notenfarben kommen aus `src/constants.ts`:
 
-- Accepts `.csv` files up to 10MB
-- Expects header row: `Name,Punkte` (German locale)
-- Numeric validation: points must be floats in range 0-1000
-- Returns `[]models.Student` or error with logging
-- Used only for grade calculation, NOT stored permanently (session-only)
-
-### Grade Calculation Algorithm
-
-`pkg/calculator/CalculateGradeBounds()` implements the Austrian 1-5 scale.
-
-The **breakpoint (Knickpunkt)** is the passing threshold: it marks the lower bound of grade 4 (Genügend). Everything below the breakpoint is grade 5 (Nicht Genügend). The range from the breakpoint up to the maximum points is split into four equal segments for grades 4, 3, 2 and 1.
-
-With `breakAbs = maxPoints * breakPointPercent/100` and `segment = (maxPoints - breakAbs) / 4`:
-
-- Grade 1: `breakAbs + 3*segment` to maxPoints
-- Grade 2: `breakAbs + 2*segment` to grade 1 lower bound
-- Grade 3: `breakAbs + 1*segment` to grade 2 lower bound
-- Grade 4: `breakAbs` (breakpoint) to grade 3 lower bound
-- Grade 5: 0 to below the breakpoint
-
-Example (max 45, breakpoint 50% → 22.5): Grade 4 starts at 22.5, grade 5 covers 0–22.
-
-**Rounding**: All boundaries rounded to nearest `minPoints` increment to avoid ambiguity.
-
-### Export Handlers (CSV & Excel)
-
-Six export endpoints (all CSRF-protected):
-
-1. `/download/grade-scale` - Boundaries as CSV
-2. `/download/student-results` - Student names + grades as CSV
-3. `/download/combined` - Full data as CSV
-4. `/download/*-excel` variants - Same data as `.xlsx`
-
-Handlers in `pkg/downloads/`:
-
-- Retrieve data from session store
-- Set `Content-Disposition: attachment; filename=...` header
-- Set proper MIME types (`text/csv`, `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`)
-- Log export events for audit
-
-### Environment Configuration
-
-```bash
-# .env file
-ENV=production              # 'production' or 'development'
-HOSTNAME=notenschluessel.example.com  # Used for CSRF trusted origins
+```ts
+export const GRADE_COLORS = {
+    1: { bg: "#d4edda", border: "#a3d9a3", text: "#155724" },
+    // ...
+} as const;
 ```
 
-- **Production**: HTTPS only, strict CSP, enforced HSTS
-- **Development**: HTTP/HTTPS localhost allowed, relaxed CSP inline scripts
-- Running with `--health-check` flag returns "OK" and exits (for container probes)
+- UI: CSS-Klassen `.grade-1` bis `.grade-5` in `style.css`
+- Excel-Export: `getGradeStyle()` in `src/export/excelExport.ts`
+  - RGB-Format ohne Prefix (z.B. `D4EDDA`) – `xlsx-js-style` erwartet 6-stelliges Hex, kein ARGB
+  - `patternType: "solid"` ist Pflicht, sonst ignoriert LibreOffice die Farbe
+  - Die ganze Tabellenzeile (Spalten A–C) wird via `styleGradeRow()` eingefärbt, nicht nur die Notenzelle
+
+### CSV-Injection-Schutz
+
+Im CSV-Export werden gefährliche Zeichen am Zeilenanfang escaped:
+
+```ts
+// src/export/csvExport.ts
+function sanitizeCSVValue(value: string): string { ... }
+```
 
 ## Project Structure
 
 ```
 notenschluessel/
-├── main.go                    # Server setup, middleware wiring, route definitions
-├── pkg/
-│   ├── calculator/            # Grade boundary & student grade logic
-│   ├── downloads/             # CSV/Excel export generation
-│   ├── handlers/              # HTTP request handlers (main business logic)
-│   ├── logging/               # Structured slog wrapper (JSON output)
-│   ├── models/                # Data types, constants (security limits, rates)
-│   ├── security/              # Rate limiting, IP extraction, CSV validation
-│   └── session/               # In-memory session store
-├── templates/                 # HTML templates (single index.html)
-├── dockerfile                 # Multi-stage build, scratch base, non-root user
-└── compose.yml                # Docker Compose for local dev
+├── nginx.conf                     # nginx Server-Konfiguration
+├── style.css                      # Zentrales CSS-Theme
+├── index.html                     # Vite App-Einstieg
+├── src/
+│   ├── app.ts                     # DOM-Controller, Form-Handling, Exports
+│   ├── constants.ts               # LIMITS, GRADE_COLORS (Single Source of Truth)
+│   ├── types.ts                   # Shared TypeScript-Interfaces
+│   ├── core/
+│   │   ├── calculator.ts          # Notengrenz-Berechnung
+│   │   ├── grading.ts             # Schüler-Benotung und Durchschnitt
+│   │   └── validation.ts          # Eingabe- und Modus-Validierung
+│   ├── parsers/
+│   │   ├── csvParser.ts           # CSV-Parsing mit Delimiter-Erkennung
+│   │   └── manualParser.ts        # Manuelle Zeilen-Eingabe
+│   ├── export/
+│   │   ├── csvExport.ts           # CSV-Export mit Injection-Schutz
+│   │   └── excelExport.ts         # XLSX-Export mit Notenfarben
+│   └── ui/
+│       └── workflow.ts            # Orchestrierung: Validierung → Parsing → Berechnung
+├── tests/
+│   ├── unit/                      # calculator, grading, validation, csvParser, manualParser, export
+│   └── integration/               # fullWorkflow, inputModes
+├── dockerfile                     # Multi-Stage: node:24-alpine Build → nginx:alpine Runtime
+└── compose.yml                    # Docker Compose für lokale Entwicklung
 ```
 
 ## Development Workflows
 
-### Building & Running Locally
+### Lokal entwickeln (schnellste Schleife)
 
 ```bash
-# Run directly
-go run main.go
-
-# With Docker
-docker compose up
-
-# Health check
-./main --health-check
+npm install
+npm run dev       # Vite Dev-Server auf http://localhost:5173
 ```
 
-### Testing
-
-Existing unit tests cover calculator, downloads, handlers, security and session packages:
+### Produktions-Build lokal testen
 
 ```bash
-go test ./pkg/calculator -v
-go test ./... -cover
+npm run build
+docker compose up --build
+curl http://localhost:8080/healthz  # → "OK"
 ```
 
-### Adding New Features
+### Tests
 
-1. **New calculation variant**: Add to `pkg/calculator/`, call from `HandleHome()`
-2. **New export format**: Add handler in `pkg/downloads/`, register route in `main.go`, wrap with CSRF/security
-3. **New endpoint**: Always wrap with full middleware stack: `securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(...)))`
-4. **New session data**: Use `sessionStore.Set(sessionID, pageData)` pattern
-5. **New error case**: Log with `logging.LogError()` and return `Message{Type: "error", ...}` to template
+```bash
+npm run test           # Vitest: Unit + Integration
+npm run type-check     # TypeScript-Typen prüfen
+```
 
-### Debugging
+## Notenberechnungs-Algorithmus
 
-- Enable detailed logs: Change `logging.go` line 20 `slog.LevelInfo` → `slog.LevelDebug`
-- Check rate limit state: `RateLimiter.limiters` map (exported for debugging)
-- Session data inspection: `SessionStore.sessions` map
-- Template rendering: `h.executeTemplateSafe()` catches and logs panics
+`src/core/calculator.ts` implementiert die österreichische 1–5-Skala.
 
-## Key Dependencies
+Der **Knickpunkt** ist die Bestehensschwelle (Untergrenze Note 4). Darunter → Note 5. Der Bereich vom Knickpunkt bis Maximalpunktzahl wird in 4 gleiche Segmente geteilt.
 
-- **excelize** (`github.com/xuri/excelize`) - Excel file generation
-- **golang.org/x/time/rate** - Token bucket rate limiting
-- **stdlib only**: No external HTTP framework, use `net/http` and `html/template` directly
+Mit `breakAbs = maxPoints * breakPointPercent/100` und `segment = (maxPoints - breakAbs) / 4`:
 
-## Common Mistakes to Avoid
+- Note 1: `breakAbs + 3*segment` bis maxPoints
+- Note 2: `breakAbs + 2*segment` bis Note-1-Untergrenze
+- Note 3: `breakAbs + 1*segment` bis Note-2-Untergrenze
+- Note 4: `breakAbs` bis Note-3-Untergrenze
+- Note 5: 0 bis unter Knickpunkt
 
-1. ❌ Adding CSRF tokens to form fields - Go 1.25 validates headers instead
-2. ❌ Using `fmt.Print*` for app events - Always use `logging` package
-3. ❌ Forgetting to wrap handlers with `securityHeaders(csrf.Handler(...))`
-4. ❌ Combining CSV and manual student input in one request
-5. ❌ Logging student names in warning/error paths
-6. ❌ Treating session ID as secret - It's logged and should be unpredictable but not encryption-strength
+**Rundung**: Alle Grenzen auf nächstes `minPoints`-Inkrement gerundet.
 
-## Important Files for Reference
+## Häufige Fehler vermeiden
 
-- **Security architecture**: `main.go:65-103` (middleware setup)
-- **CSRF configuration**: `main.go:41-53` (trusted origins logic)
-- **Form processing**: `pkg/handlers/handlers.go:HandleHome()`
-- **Grading algorithm**: `pkg/calculator/calculator.go:CalculateGradeBounds()`
-- **Exports**: `pkg/downloads/` (all three formats)
-- **Logging events**: `pkg/logging/logging.go` (all LogX functions)
+1. ❌ Schülerdaten an Server senden – Berechnung läuft komplett im Browser
+2. ❌ CSS-Klassen für Noten in `style.css` und Farben in `constants.ts` separat pflegen – immer aus `GRADE_COLORS` ableiten
+3. ❌ XLSX-Zellfarben ohne `patternType: "solid"` setzen – LibreOffice ignoriert sie sonst
+4. ❌ Excel-Styles mit `xlsx` (Community) statt `xlsx-js-style` schreiben – Styles werden dann verworfen; Farben als 6-stelliges RGB (`D4EDDA`), nicht ARGB
+5. ❌ CSV und Manuell gleichzeitig übergeben – gegenseitig ausschließend
+6. ❌ Beim Mode-Umschalten alte Eingabedaten nicht leeren – führt zu falschem Validierungsfehler
+7. ❌ Security-Header nur im Server-Block definieren – in nginx nested `location`-Blöcken müssen `add_header` wiederholt werden
+
+## Wichtige Dateien
+
+- **Algorithmus**: `src/core/calculator.ts`
+- **Validierung**: `src/core/validation.ts`
+- **Notenfarben (Basis)**: `src/constants.ts` → `GRADE_COLORS`
+- **Excel-Export**: `src/export/excelExport.ts`
+- **DOM-Controller**: `src/app.ts`
+- **CSS-Theme**: `style.css`
+- **nginx-Konfiguration**: `nginx.conf`
