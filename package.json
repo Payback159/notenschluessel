@@ -13,8 +13,8 @@
     },
     "devDependencies": {
         "typescript": "^5.9.2",
-        "vite": "^7.1.2",
-        "vitest": "^3.2.4"
+        "vite": "^8.0.16",
+        "vitest": "^4.1.9"
     },
     "dependencies": {
         "xlsx-js-style": "^1.2.0"
