@@ -103,14 +103,19 @@ Located in `pkg/calculator/ParseStudentFile()`:
 
 ### Grade Calculation Algorithm
 
-`pkg/calculator/CalculateGradeBounds()` implements German 1-6 scale:
+`pkg/calculator/CalculateGradeBounds()` implements the Austrian 1-5 scale.
 
-- Grade 1: 85-100% of max points
-- Grade 2: breakpoint-85%
-- Grade 3: 60% of breakpoint to breakpoint
-- Grade 4: 33%-60% of breakpoint
-- Grade 5: 0-33% of breakpoint
-- Grade 6: below 0 (unused, but framework supports)
+The **breakpoint (Knickpunkt)** is the passing threshold: it marks the lower bound of grade 4 (Genügend). Everything below the breakpoint is grade 5 (Nicht Genügend). The range from the breakpoint up to the maximum points is split into four equal segments for grades 4, 3, 2 and 1.
+
+With `breakAbs = maxPoints * breakPointPercent/100` and `segment = (maxPoints - breakAbs) / 4`:
+
+- Grade 1: `breakAbs + 3*segment` to maxPoints
+- Grade 2: `breakAbs + 2*segment` to grade 1 lower bound
+- Grade 3: `breakAbs + 1*segment` to grade 2 lower bound
+- Grade 4: `breakAbs` (breakpoint) to grade 3 lower bound
+- Grade 5: 0 to below the breakpoint
+
+Example (max 45, breakpoint 50% → 22.5): Grade 4 starts at 22.5, grade 5 covers 0–22.
 
 **Rounding**: All boundaries rounded to nearest `minPoints` increment to avoid ambiguity.
 

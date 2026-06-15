@@ -214,3 +214,28 @@ func TestHandleHome_POST_InvalidMinPoints(t *testing.T) {
 		t.Error("response should contain error for invalid min points")
 	}
 }
+
+func TestHandleHome_POST_InvalidScaleCombination(t *testing.T) {
+	h := newTestHandler()
+	body := buildMultipartBody(map[string]string{
+		"maxPoints":         "10",
+		"minPoints":         "5",
+		"breakPointPercent": "1",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=boundary")
+	w := httptest.NewRecorder()
+
+	h.HandleHome(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("want 200 (with error message), got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "keine gültige Notenskala") {
+		t.Error("response should contain error for invalid scale combination")
+	}
+	if strings.Contains(w.Body.String(), "results") {
+		t.Error("invalid scale combination should not render results")
+	}
+}

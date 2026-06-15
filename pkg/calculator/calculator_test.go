@@ -251,3 +251,205 @@ func TestCalculateAverageGrade_RoundsToTwoDecimals(t *testing.T) {
 		t.Errorf("average: want 1.33, got %.2f", avg)
 	}
 }
+
+// --- Arbitrary points / step sizes (sweep over the valid input domain) ---
+
+// isMultipleOf reports whether v is an integer multiple of step (within epsilon).
+func isMultipleOf(v, step float64) bool {
+	r := math.Mod(v, step)
+	return r < 1e-9 || math.Abs(r-step) < 1e-9
+}
+
+// assertBoundsInvariants checks the properties that must hold for every valid
+// combination of maxPoints, minPoints and breakPointPercent.
+func assertBoundsInvariants(t *testing.T, maxPoints int, minPoints, breakPointPercent float64) {
+	t.Helper()
+
+	bounds := CalculateGradeBounds(maxPoints, minPoints, breakPointPercent)
+
+	if len(bounds) != 5 {
+		t.Fatalf("max=%d step=%g bp=%g: expected 5 bounds, got %d",
+			maxPoints, minPoints, breakPointPercent, len(bounds))
+	}
+
+	// Grades labelled 1..5 in order
+	for i, b := range bounds {
+		if b.Grade != i+1 {
+			t.Errorf("max=%d step=%g bp=%g: bound[%d].Grade want %d, got %d",
+				maxPoints, minPoints, breakPointPercent, i, i+1, b.Grade)
+		}
+	}
+
+	// Grade 1 always tops out at maxPoints, grade 5 always bottoms out at 0
+	if bounds[0].UpperBound != float64(maxPoints) {
+		t.Errorf("max=%d step=%g bp=%g: grade 1 upper want %d, got %.2f",
+			maxPoints, minPoints, breakPointPercent, maxPoints, bounds[0].UpperBound)
+	}
+	if bounds[4].LowerBound != 0 {
+		t.Errorf("max=%d step=%g bp=%g: grade 5 lower want 0, got %.2f",
+			maxPoints, minPoints, breakPointPercent, bounds[4].LowerBound)
+	}
+
+	// The breakpoint is the lower bound of grade 4 (rounded to the step).
+	// Mirror the production grouping exactly to avoid float rounding drift.
+	breakAbs := float64(maxPoints) * (breakPointPercent / 100.0)
+	wantBreak := math.Max(0, math.Round(breakAbs/minPoints)*minPoints)
+	if math.Abs(bounds[3].LowerBound-wantBreak) > 1e-9 {
+		t.Errorf("max=%d step=%g bp=%g: grade 4 lower (breakpoint) want %.2f, got %.2f",
+			maxPoints, minPoints, breakPointPercent, wantBreak, bounds[3].LowerBound)
+	}
+
+	for _, b := range bounds {
+		// No negative lower bounds
+		if b.LowerBound < 0 {
+			t.Errorf("max=%d step=%g bp=%g: grade %d has negative lower bound %.2f",
+				maxPoints, minPoints, breakPointPercent, b.Grade, b.LowerBound)
+		}
+		// Lower bounds must align to the step size
+		if !isMultipleOf(b.LowerBound, minPoints) {
+			t.Errorf("max=%d step=%g bp=%g: grade %d lower bound %.4f not a multiple of step",
+				maxPoints, minPoints, breakPointPercent, b.Grade, b.LowerBound)
+		}
+	}
+
+	// Lower bounds must be monotonically non-increasing from grade 1 to 5
+	for i := 1; i < len(bounds); i++ {
+		if bounds[i].LowerBound > bounds[i-1].LowerBound {
+			t.Errorf("max=%d step=%g bp=%g: grade %d lower (%.2f) > grade %d lower (%.2f)",
+				maxPoints, minPoints, breakPointPercent,
+				bounds[i].Grade, bounds[i].LowerBound,
+				bounds[i-1].Grade, bounds[i-1].LowerBound)
+		}
+	}
+}
+
+// TestCalculateGradeBounds_ArbitraryInputs sweeps a wide range of point counts,
+// step sizes and breakpoints to ensure the core invariants always hold.
+func TestCalculateGradeBounds_ArbitraryInputs(t *testing.T) {
+	maxPointsCases := []int{7, 10, 13, 20, 37, 45, 50, 73, 100, 137, 250, 1000}
+	stepCases := []float64{0.25, 0.5, 1, 2, 2.5, 5}
+	breakCases := []float64{1, 25, 40, 50, 60, 66.6, 75, 90, 99}
+
+	for _, mp := range maxPointsCases {
+		for _, step := range stepCases {
+			if step > float64(mp) { // mirrors handler validation: step <= maxPoints
+				continue
+			}
+			for _, bp := range breakCases {
+				assertBoundsInvariants(t, mp, step, bp)
+			}
+		}
+	}
+}
+
+// TestCalculateGradeBounds_NonInvertedRanges verifies that when the scale has
+// enough resolution (enough step increments to fit five distinct grades) every
+// grade range is well-formed: upper >= lower and ranges do not overlap.
+func TestCalculateGradeBounds_NonInvertedRanges(t *testing.T) {
+	maxPointsCases := []int{20, 37, 45, 50, 73, 100, 250}
+	stepCases := []float64{0.25, 0.5, 1, 2.5}
+	breakCases := []float64{40, 50, 60, 66.6}
+
+	for _, mp := range maxPointsCases {
+		for _, step := range stepCases {
+			// Require enough increments so five grades can be represented.
+			if float64(mp)/step < 16 {
+				continue
+			}
+			for _, bp := range breakCases {
+				bounds := CalculateGradeBounds(mp, step, bp)
+				for _, b := range bounds {
+					if b.UpperBound < b.LowerBound {
+						t.Errorf("max=%d step=%g bp=%g: grade %d inverted range %.2f-%.2f",
+							mp, step, bp, b.Grade, b.LowerBound, b.UpperBound)
+					}
+				}
+				// Adjacent grades must not overlap: grade i upper < grade i-1 lower.
+				for i := 1; i < len(bounds); i++ {
+					if bounds[i].UpperBound >= bounds[i-1].LowerBound {
+						t.Errorf("max=%d step=%g bp=%g: grade %d upper (%.2f) overlaps grade %d lower (%.2f)",
+							mp, step, bp, bounds[i].Grade, bounds[i].UpperBound,
+							bounds[i-1].Grade, bounds[i-1].LowerBound)
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestCalculateGradeBounds_BreakpointRegression locks in the reported bug fix:
+// max 45, step 0.5, breakpoint 50% must put the passing line (grade 4) at 22.5
+// and let grade 5 cover 0-22, not collapse to ~7 points.
+func TestCalculateGradeBounds_BreakpointRegression(t *testing.T) {
+	bounds := CalculateGradeBounds(45, 0.5, 50)
+
+	want := []struct {
+		grade        int
+		lower, upper float64
+	}{
+		{1, 39.5, 45.0},
+		{2, 34.0, 39.0},
+		{3, 28.0, 33.5},
+		{4, 22.5, 27.5},
+		{5, 0.0, 22.0},
+	}
+
+	for i, w := range want {
+		b := bounds[i]
+		if b.Grade != w.grade || math.Abs(b.LowerBound-w.lower) > 1e-9 || math.Abs(b.UpperBound-w.upper) > 1e-9 {
+			t.Errorf("grade %d: want %.1f-%.1f, got %.1f-%.1f",
+				w.grade, w.lower, w.upper, b.LowerBound, b.UpperBound)
+		}
+	}
+}
+
+// TestCalculateGradeBounds_EqualSegmentsAboveBreakpoint verifies that the four
+// grades above the breakpoint span equal segments before rounding, for an
+// arbitrary point count and step size.
+func TestCalculateGradeBounds_EqualSegmentsAboveBreakpoint(t *testing.T) {
+	// max 80, step 1, breakpoint 50% -> breakpoint at 40, segment = 10.
+	bounds := CalculateGradeBounds(80, 1, 50)
+
+	expected := map[int]float64{1: 70, 2: 60, 3: 50, 4: 40}
+	for _, b := range bounds {
+		if want, ok := expected[b.Grade]; ok {
+			if math.Abs(b.LowerBound-want) > 1e-9 {
+				t.Errorf("grade %d lower bound: want %.1f, got %.1f", b.Grade, want, b.LowerBound)
+			}
+		}
+	}
+}
+
+// TestCalculateGradeBounds_RoundingAlignsToStep checks step alignment for an
+// unusual step size (0.25) and a non-round point count.
+func TestCalculateGradeBounds_RoundingAlignsToStep(t *testing.T) {
+	bounds := CalculateGradeBounds(37, 0.25, 60)
+
+	for _, b := range bounds {
+		if !isMultipleOf(b.LowerBound, 0.25) {
+			t.Errorf("grade %d lower bound %.4f is not a multiple of 0.25", b.Grade, b.LowerBound)
+		}
+	}
+}
+
+func TestValidateGradeBounds_Valid(t *testing.T) {
+	bounds := CalculateGradeBounds(45, 0.5, 50)
+
+	valid, reason := ValidateGradeBounds(bounds)
+	if !valid {
+		t.Fatalf("expected valid bounds, got invalid: %s", reason)
+	}
+}
+
+func TestValidateGradeBounds_InvalidDegenerateRanges(t *testing.T) {
+	// Coarse step size with very low breakpoint collapses/inverts ranges.
+	bounds := CalculateGradeBounds(10, 5, 1)
+
+	valid, reason := ValidateGradeBounds(bounds)
+	if valid {
+		t.Fatal("expected invalid bounds, got valid")
+	}
+	if reason == "" {
+		t.Fatal("expected non-empty reason for invalid bounds")
+	}
+}

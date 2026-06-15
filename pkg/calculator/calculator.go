@@ -17,23 +17,28 @@ import (
 
 // CalculateGradeBounds calculates the grade boundaries based on parameters
 func CalculateGradeBounds(maxPoints int, minPoints, breakPointPercent float64) []models.GradeBound {
-	// Calculate breakpoint in absolute points
+	// The breakpoint (Knickpunkt) is the passing threshold: it marks the lower
+	// bound of grade 4 (Genügend). Everything below the breakpoint is grade 5
+	// (Nicht Genügend). The range from the breakpoint up to the maximum points
+	// is split into four equal segments for grades 4, 3, 2 and 1.
 	breakPointAbsolute := float64(maxPoints) * (breakPointPercent / 100.0)
 
-	// Calculate points needed for each grade
-	// Grade 1 (very good): 100% to ~85% of max points
-	lowerBound1 := float64(maxPoints) * 0.85
+	// Width of each grade segment above the breakpoint
+	segment := (float64(maxPoints) - breakPointAbsolute) / 4.0
 
-	// Grade 2 (good): ~85% to breakpoint
-	lowerBound2 := breakPointAbsolute
+	// Grade 4 (adequate): breakpoint to breakpoint + 1 segment
+	lowerBound4 := breakPointAbsolute
 
-	// Grade 3 (satisfactory): breakpoint to ~60% of breakpoint
-	lowerBound3 := breakPointAbsolute * 0.6
+	// Grade 3 (satisfactory)
+	lowerBound3 := breakPointAbsolute + segment
 
-	// Grade 4 (adequate): ~60% of breakpoint to ~33% of breakpoint
-	lowerBound4 := breakPointAbsolute * 0.33
+	// Grade 2 (good)
+	lowerBound2 := breakPointAbsolute + 2*segment
 
-	// Grade 5 (inadequate): below ~33% of breakpoint
+	// Grade 1 (very good)
+	lowerBound1 := breakPointAbsolute + 3*segment
+
+	// Grade 5 (inadequate): below the breakpoint
 	lowerBound5 := 0.0
 
 	// Round to nearest minPoints increment
@@ -67,6 +72,28 @@ func CalculateGradeBounds(maxPoints int, minPoints, breakPointPercent float64) [
 		"grade_4_lower", lowerBound4)
 
 	return gradeBounds
+}
+
+// ValidateGradeBounds ensures the calculated ranges are usable for grading.
+// Very coarse step sizes can collapse or invert ranges after rounding.
+func ValidateGradeBounds(gradeBounds []models.GradeBound) (bool, string) {
+	if len(gradeBounds) != 5 {
+		return false, "insufficient grade bounds"
+	}
+
+	for _, bound := range gradeBounds {
+		if bound.UpperBound < bound.LowerBound {
+			return false, fmt.Sprintf("grade %d has inverted range", bound.Grade)
+		}
+	}
+
+	for i := 1; i < len(gradeBounds); i++ {
+		if gradeBounds[i].UpperBound >= gradeBounds[i-1].LowerBound {
+			return false, fmt.Sprintf("grade %d overlaps with grade %d", gradeBounds[i].Grade, gradeBounds[i-1].Grade)
+		}
+	}
+
+	return true, ""
 }
 
 // CalculateGrade determines the grade based on points and grade boundaries

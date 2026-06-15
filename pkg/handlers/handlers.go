@@ -140,6 +140,24 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate grade bounds
 	gradeBounds := calculator.CalculateGradeBounds(maxPoints, minPoints, breakPointPercent)
+	if valid, reason := calculator.ValidateGradeBounds(gradeBounds); !valid {
+		logging.LogWarn("Invalid grade scale configuration",
+			"max_points", maxPoints,
+			"min_points", minPoints,
+			"break_point_percent", breakPointPercent,
+			"reason", reason,
+			"ip", ip)
+
+		pageData.MaxPoints = maxPoints
+		pageData.MinPoints = minPoints
+		pageData.BreakPointPercent = breakPointPercent
+		pageData.Message = &models.Message{
+			Type: models.MessageError,
+			Text: "Diese Kombination aus maximaler Punktzahl, Schrittweite und Knickpunkt ergibt keine gültige Notenskala. Bitte Schrittweite verkleinern oder Punktzahl erhöhen.",
+		}
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
+		return
+	}
 
 	// Set basic page data
 	pageData.MaxPoints = maxPoints
