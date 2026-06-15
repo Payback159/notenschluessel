@@ -7,6 +7,20 @@ type Student struct {
 	Grade  int
 }
 
+// InputMode represents the selected student input method.
+type InputMode string
+
+const (
+	InputModeCSV    InputMode = "csv"
+	InputModeManual InputMode = "manual"
+)
+
+// ManualEntry stores raw manual form values for re-rendering on validation errors.
+type ManualEntry struct {
+	Name   string
+	Points string
+}
+
 // MessageType defines the type of message (success, error, warning)
 type MessageType string
 
@@ -27,8 +41,10 @@ type PageData struct {
 	MaxPoints          int
 	MinPoints          float64
 	BreakPointPercent  float64
+	InputMode          InputMode
 	GradeBounds        []GradeBound
 	Students           []Student
+	ManualEntries      []ManualEntry
 	AverageGrade       float64
 	HasResults         bool
 	HasStudents        bool

@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/payback159/notenschluessel/pkg/calculator"
@@ -50,6 +51,7 @@ func (h *Handler) HandleHome(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodGet {
 		pageData := models.PageData{
+			InputMode: models.InputModeCSV,
 			// Go 1.25+ native cross-origin protection - no CSRF field needed
 		}
 		h.executeTemplateSafe(w, "index.html", pageData, "", security.GetClientIP(r))
@@ -95,6 +97,12 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 	maxPointsStr := r.FormValue("maxPoints")
 	minPointsStr := r.FormValue("minPoints")
 	breakPointPercentStr := r.FormValue("breakPointPercent")
+	inputMode := models.InputMode(r.FormValue("inputMode"))
+	if inputMode == "" {
+		inputMode = models.InputModeCSV
+	}
+	pageData.InputMode = inputMode
+	pageData.ManualEntries = parseManualEntries(r)
 
 	maxPoints, err := strconv.Atoi(maxPointsStr)
 	if err != nil || maxPoints <= 0 || maxPoints > 1000 {
@@ -167,47 +175,98 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 	pageData.HasResults = true
 	pageData.CalculationSuccess = true
 
-	// Process uploaded CSV file if present
-	file, fileHeader, err := r.FormFile("csvFile")
-	if err == nil {
-		defer file.Close()
-
-		logging.LogInfo("Processing uploaded CSV file",
-			"filename", fileHeader.Filename,
-			"size", fileHeader.Size,
-			"ip", ip)
-
-		students, err := calculator.ParseCSVFile(fileHeader)
-		if err != nil {
-			logging.LogError("Failed to parse CSV file", err,
-				"filename", fileHeader.Filename,
-				"size", fileHeader.Size,
-				"ip", ip)
-			pageData.Message = &models.Message{
-				Type: models.MessageError,
-				Text: fmt.Sprintf("Fehler beim Verarbeiten der CSV-Datei: %v", err),
-			}
-		} else {
-			// Calculate grades for students
-			students = calculator.ProcessStudents(students, gradeBounds)
-			averageGrade := calculator.CalculateAverageGrade(students)
-
-			pageData.Students = students
-			pageData.AverageGrade = averageGrade
-			pageData.HasStudents = true
-
-			logging.LogInfo("Students processed successfully",
-				"student_count", len(students),
-				"average_grade", averageGrade,
-				"filename", fileHeader.Filename,
-				"ip", ip)
-		}
-	} else if err != http.ErrMissingFile {
-		logging.LogError("Error accessing uploaded file", err, "ip", ip)
+	// Detect if a CSV file was uploaded.
+	csvFile, fileHeader, fileErr := r.FormFile("csvFile")
+	csvProvided := false
+	if fileErr == nil {
+		csvProvided = true
+		defer csvFile.Close()
+	} else if fileErr != http.ErrMissingFile {
+		logging.LogError("Error accessing uploaded file", fileErr, "ip", ip)
 		pageData.Message = &models.Message{
 			Type: models.MessageError,
 			Text: "Fehler beim Zugriff auf die hochgeladene Datei",
 		}
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
+		return
+	}
+
+	manualProvided := hasNonEmptyManualEntries(pageData.ManualEntries)
+
+	// Input methods are offered as alternatives and may not be combined.
+	if csvProvided && manualProvided {
+		logging.LogWarn("Both CSV and manual input provided",
+			"ip", ip,
+			"manual_entries", len(pageData.ManualEntries))
+		pageData.Message = &models.Message{
+			Type: models.MessageError,
+			Text: "Bitte entweder CSV-Import oder manuelle Eingabe verwenden. Eine Kombination ist nicht erlaubt.",
+		}
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
+		return
+	}
+
+	if inputMode != models.InputModeCSV && inputMode != models.InputModeManual {
+		logging.LogWarn("Invalid input mode",
+			"input_mode", inputMode,
+			"ip", ip)
+		pageData.Message = &models.Message{
+			Type: models.MessageError,
+			Text: "Ungültiger Eingabemodus",
+		}
+		h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
+		return
+	}
+
+	var students []models.Student
+	switch inputMode {
+	case models.InputModeCSV:
+		if csvProvided {
+			logging.LogInfo("Processing uploaded CSV file",
+				"filename", fileHeader.Filename,
+				"size", fileHeader.Size,
+				"ip", ip)
+
+			students, err = calculator.ParseCSVFile(fileHeader)
+			if err != nil {
+				logging.LogError("Failed to parse CSV file", err,
+					"filename", fileHeader.Filename,
+					"size", fileHeader.Size,
+					"ip", ip)
+				pageData.Message = &models.Message{
+					Type: models.MessageError,
+					Text: fmt.Sprintf("Fehler beim Verarbeiten der CSV-Datei: %v", err),
+				}
+			}
+		}
+	case models.InputModeManual:
+		if manualProvided {
+			students, err = parseManualStudents(pageData.ManualEntries)
+			if err != nil {
+				logging.LogWarn("Invalid manual student entry",
+					"error", err.Error(),
+					"ip", ip)
+				pageData.Message = &models.Message{
+					Type: models.MessageError,
+					Text: err.Error(),
+				}
+			}
+		}
+	}
+
+	if pageData.Message == nil && len(students) > 0 {
+		students = calculator.ProcessStudents(students, gradeBounds)
+		averageGrade := calculator.CalculateAverageGrade(students)
+
+		pageData.Students = students
+		pageData.AverageGrade = averageGrade
+		pageData.HasStudents = true
+
+		logging.LogInfo("Students processed successfully",
+			"input_mode", inputMode,
+			"student_count", len(students),
+			"average_grade", averageGrade,
+			"ip", ip)
 	}
 
 	// Store data in session if no errors occurred
@@ -238,6 +297,7 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	logging.LogInfo("Calculation completed successfully",
 		"session_id", sessionID,
+		"input_mode", inputMode,
 		"max_points", maxPoints,
 		"min_points", minPoints,
 		"break_point_percent", breakPointPercent,
@@ -249,4 +309,125 @@ func (h *Handler) HandleCalculation(w http.ResponseWriter, r *http.Request) {
 
 	// Render template with results
 	h.executeTemplateSafe(w, "index.html", pageData, sessionID, ip)
+}
+
+// HandlePrivacy renders the privacy information page.
+func (h *Handler) HandlePrivacy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.executeTemplateSafe(w, "privacy.html", models.PageData{}, "", security.GetClientIP(r))
+}
+
+// HandleDeleteSession removes the current user's session and clears the cookie.
+func (h *Handler) HandleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ip := security.GetClientIP(r)
+	if cookie, err := r.Cookie("session_id"); err == nil && cookie.Value != "" {
+		h.SessionStore.Delete(cookie.Value)
+		logging.LogInfo("Session deleted by user request",
+			"session_id", cookie.Value,
+			"ip", ip)
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session_id",
+		Value:    "",
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	})
+
+	pageData := models.PageData{
+		InputMode: models.InputModeCSV,
+		Message: &models.Message{
+			Type: models.MessageSuccess,
+			Text: "Sitzung und temporäre Daten wurden gelöscht.",
+		},
+	}
+
+	h.executeTemplateSafe(w, "index.html", pageData, "", ip)
+}
+
+func parseManualEntries(r *http.Request) []models.ManualEntry {
+	if r.MultipartForm == nil {
+		return nil
+	}
+
+	names := r.MultipartForm.Value["manualName"]
+	points := r.MultipartForm.Value["manualPoints"]
+	maxLen := len(names)
+	if len(points) > maxLen {
+		maxLen = len(points)
+	}
+
+	entries := make([]models.ManualEntry, 0, maxLen)
+	for i := 0; i < maxLen; i++ {
+		entry := models.ManualEntry{}
+		if i < len(names) {
+			entry.Name = strings.TrimSpace(names[i])
+		}
+		if i < len(points) {
+			entry.Points = strings.TrimSpace(points[i])
+		}
+		entries = append(entries, entry)
+	}
+
+	return entries
+}
+
+func hasNonEmptyManualEntries(entries []models.ManualEntry) bool {
+	for _, entry := range entries {
+		if entry.Name != "" || entry.Points != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func parseManualStudents(entries []models.ManualEntry) ([]models.Student, error) {
+	students := make([]models.Student, 0, len(entries))
+	for i, entry := range entries {
+		name := strings.TrimSpace(entry.Name)
+		pointsStr := strings.TrimSpace(entry.Points)
+
+		if name == "" && pointsStr == "" {
+			continue
+		}
+		if name == "" {
+			return nil, fmt.Errorf("Zeile %d: Name fehlt", i+1)
+		}
+		if pointsStr == "" {
+			return nil, fmt.Errorf("Zeile %d: Punkte fehlen", i+1)
+		}
+
+		pointsStr = strings.ReplaceAll(pointsStr, ",", ".")
+		points, err := strconv.ParseFloat(pointsStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("Zeile %d: Ungültige Punktzahl", i+1)
+		}
+		if points < 0 || points > 1000 {
+			return nil, fmt.Errorf("Zeile %d: Punktzahl außerhalb des erlaubten Bereichs (0-1000)", i+1)
+		}
+
+		students = append(students, models.Student{
+			Name:   security.SanitizeName(name),
+			Points: points,
+		})
+
+		if len(students) > models.MaxStudents {
+			return nil, fmt.Errorf("Zu viele Schülerdaten (maximal %d)", models.MaxStudents)
+		}
+	}
+
+	return students, nil
 }

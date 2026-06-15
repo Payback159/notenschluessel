@@ -2,7 +2,7 @@
 
 Ein simples Tool, für Lehrerinnen und Lehrer entwickelt. Notenschlüssel nimmt dir die Rechnerei ab. Erstelle schnell und unkompliziert Notenskalen für das österreichische Notensystem (1–5), auch wenn sie einen Knick haben.
 
-Kein Login, keine Datenbank, nichts wird gespeichert. Einfach Punkte eingeben, fertig.
+Kein Login, keine Datenbank, nichts wird gespeichert. Die Berechnung läuft client-only im Browser.
 
 [![Go Version](https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square)](LICENSE)
@@ -10,18 +10,24 @@ Kein Login, keine Datenbank, nichts wird gespeichert. Einfach Punkte eingeben, f
 ## So geht's
 
 1. Maximale Punktzahl, Schrittweite und Knickpunkt eingeben
-2. Optional eine CSV-Datei mit Schülernamen und Punkten hochladen
-3. Ergebnisse ansehen, als CSV oder Excel runterladen
-
-Das war's schon.
+2. Schülerdaten optional via CSV oder manueller Tabelle erfassen
+3. Ergebnisse ansehen und als CSV/Excel exportieren
 
 ## Loslegen
 
 ```bash
+npm install
+npm run dev
+```
+
+Browser auf `http://localhost:5173` – fertig. Produktionsbuild:
+
+```bash
+npm run build
 go run main.go
 ```
 
-Browser auf `http://localhost:8080` – fertig. Oder mit Docker:
+Der Go-Dienst liefert dann nur statische Assets aus `dist` aus. Oder mit Docker:
 
 ```bash
 docker compose up
@@ -40,61 +46,63 @@ Punkt als Dezimaltrennzeichen. Semikolon als Spaltentrenner geht auch. Max. 10 M
 
 ## Unter der Haube
 
-Geschrieben in Go 1.25, keine Frameworks, fast nur Stdlib. Ein einzelner HTTP-Service, der alles macht.
+Frontend: Vanilla TypeScript (Vite).  
+Backend: Minimaler Go-Static-Server (Health + Asset-Auslieferung).
 
 ```
 notenschluessel/
-├── main.go                    # Server, Middleware, Routen
+├── main.go                    # Minimaler Static-Server
+├── src/                       # Client-only TypeScript App
+├── tests/                     # Vitest Unit/Integrationstests
+├── index.html                 # App Einstieg
+├── privacy.html               # Datenschutzseite
 ├── pkg/
-│   ├── calculator/            # Notenberechnung, CSV-Parsing
-│   ├── downloads/             # CSV/Excel-Export
-│   ├── handlers/              # HTTP-Handler
+│   ├── calculator/            # Legacy Referenzlogik (Go)
+│   ├── downloads/             # Legacy Exportlogik (Go)
+│   ├── handlers/              # Legacy Handler (Go)
 │   ├── logging/               # Strukturiertes Logging (slog/JSON)
 │   ├── models/                # Datentypen
 │   ├── security/              # Rate Limiting, IP-Extraktion
 │   └── session/               # In-Memory Session Store
-├── templates/
+├── templates/                 # Legacy Templates (Go)
 ├── dockerfile
 └── compose.yml
 ```
 
-Zwei externe Dependencies:
+Dependencies:
+- [xlsx](https://www.npmjs.com/package/xlsx) für Excel-Export im Browser
 - [excelize](https://github.com/xuri/excelize) für Excel-Export
 - [golang.org/x/time/rate](https://pkg.go.dev/golang.org/x/time/rate) für Rate Limiting
 
 ## Sicherheit
 
-Auch wenn es nur ein Notenschlüssel ist – wenn man das Ding ins Netz stellt, sollte es ordentlich abgesichert sein:
+Client-only Datenverarbeitung reduziert Datenschutzrisiko deutlich:
 
-- CSRF-Schutz über Go 1.25 nativ (`http.NewCrossOriginProtection()`)
-- Rate Limiting pro IP (10 req/min, Burst 20)
+- Keine serverseitige Verarbeitung von Schülerdaten
+- Keine Nutzdaten-POST-Endpunkte
 - Security Headers (CSP, HSTS, X-Frame-Options, Permissions-Policy)
-- Session-Cookies: HttpOnly, SameSite=Strict
 - CSV-Injection-Schutz bei Exporten
-- Reverse-Proxy-Support (X-Forwarded-For, X-Real-IP)
-
-Keine Datenbank, keine Persistenz. Sessions leben im Memory und laufen nach 24h ab. Schülerdaten werden nur für die Berechnung verwendet und nie gespeichert. DSGVO-konform.
+- Lokale Daten können in der App direkt gelöscht werden
 
 ## Konfiguration
 
 | Variable   | Werte                        | Beschreibung                        |
 | ---------- | ---------------------------- | ----------------------------------- |
-| `ENV`      | `production` / `development` | Steuert HSTS, CSRF-Origins, Logging |
-| `HOSTNAME` | z.B. `noten.example.com`     | Trusted Origin für CSRF             |
+| `ENV`      | `production` / `development` | Steuert HSTS Header                 |
+| `STATIC_DIR` | z.B. `dist` / `/app/dist`  | Verzeichnis für statische Assets    |
 
-Im Development geht `localhost:8080`, in Production nur der konfigurierte Hostname über HTTPS.
+Im Development läuft die TS-App via Vite (`localhost:5173`), in Production statisch via Go (`localhost:8080`).
 
 ## Tests
 
 ```bash
-go test ./... -v        # alle Tests
-go test ./... -race     # mit Race-Detector
-go test ./... -cover    # mit Coverage
+npm run test            # TS Unit + Integration
+go test ./... -v        # Legacy Go Tests
 ```
 
 ## Docker
 
-Multi-Stage Build nach `scratch`, ~15 MB Image, non-root User. Health Check über `/healthz`:
+Multi-Stage Build: Node für Frontend-Build, Go für Static-Binary, Runtime in `scratch`. Health Check über `/healthz`:
 
 ```bash
 ./notenschluessel --health-check
@@ -104,9 +112,9 @@ Braucht kein curl im Container – der Binary prüft sich selbst.
 
 ## Für Entwickler
 
-- Middleware (Security Headers, CSRF, Rate Limiting) liegt einmal auf dem gesamten Router – neue Endpunkte sind automatisch geschützt
-- Logging über das `logging`-Package, nicht `fmt.Println`
-- Keine CSRF-Tokens in Formulare – Go 1.25 macht das über Browser-Header
+- TS-Fachlogik in `src/` ist die aktive App-Implementierung
+- Go-Server dient nur dem statischen Ausliefern von `dist`
+- Legacy-Go-Code bleibt vorerst als Referenz erhalten
 
 ## Lizenz
 

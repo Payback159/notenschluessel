@@ -2,18 +2,18 @@
 
 ## Project Overview
 
-**Notenschlüssel** is an Austrian grading scale calculator built in **Go 1.25** with a focus on security, structured logging, and educational use (DSGVO compliant). It calculates grade boundaries using a Austrian 1-6 grading scale with configurable breakpoints, supports CSV import/export for student results, and includes Excel export capabilities.
+**Notenschlüssel** is an Austrian grading scale calculator built in **Go 1.26** with a focus on security, structured logging, and educational use (DSGVO compliant). It calculates grade boundaries using a Austrian 1-5 grading scale with configurable breakpoints, supports CSV and manual student input, and includes CSV/Excel export capabilities.
 
 ### Architecture
 
-- **Monolithic HTTP service** (Go 1.25 stdlib only)
+- **Monolithic HTTP service** (Go 1.26 stdlib only)
 - **Core layers**: handlers → calculator → models, with security/logging/session support
 - **Middleware stack**: Security headers → CSRF protection (native Go 1.25) → Rate limiting → Handler
 - **Data flow**: Form input → Calculation → Session storage → Template rendering or export
 
 ## Critical Patterns & Conventions
 
-### Go 1.25 Native CSRF Protection
+### Go 1.25+ Native CSRF Protection
 
 ⚠️ **Key architectural decision**: Uses `http.NewCrossOriginProtection()` instead of external libraries.
 
@@ -43,6 +43,9 @@ Key functions:
 - `logging.LogInfo(msg string, args ...any)` - informational events
 - `logging.LogError(msg string, err error, args ...any)` - errors with stack context
 - `logging.LogDebug(msg string, args ...any)` - low-level details (only when debugging)
+- `logging.LogWarn(msg string, args ...any)` - warnings
+- `logging.LogCritical(msg string, err error, args ...any)` - critical failures
+- `logging.LogPerformance(operation string, duration time.Duration, args ...any)` - performance metrics
 - `logging.LogSecurityEvent(msg string, severity string, args ...any)` - security-relevant (rate limits, auth failures)
 - `logging.LogSystemStats()` - called every 10 minutes for resource usage
 
@@ -52,10 +55,10 @@ Sessions store grade calculations and file uploads per user (see `pkg/session/`)
 
 ```go
 // Store data
-sessionStore.SetData(sessionID, key, value)
+sessionStore.Set(sessionID, pageData)
 
 // Retrieve and use
-data := sessionStore.GetData(sessionID, "gradeBounds")
+data, ok := sessionStore.Get(sessionID)
 ```
 
 - SessionID passed to all templates and handlers for audit trails
@@ -73,7 +76,7 @@ Applied in order: Security headers → CSRF → Rate limiting → Handler
 - `Strict-Transport-Security: max-age=31536000` (production only)
 - `X-Content-Type-Options: nosniff`, `X-XSS-Protection: 1; mode=block`
 
-**Rate limiting** (per IP, 60 requests/minute by default):
+**Rate limiting** (per IP, 10 requests/minute, burst 20):
 
 ```go
 rateLimiter := security.NewRateLimiter() // Create once in main
@@ -86,18 +89,22 @@ rateLimiter := security.NewRateLimiter() // Create once in main
 - Input validation in `handlers.HandleHome()`:
   - `maxPoints`: required, positive integer
   - `minPoints`: required, positive float
-  - `breakPointPercent`: 0-100 range
-  - CSV file (optional): max 10MB, validated CSV structure
+  - `breakPointPercent`: 1-99 range
+  - `inputMode`: `csv` or `manual`
+  - Student input: CSV upload or manual table entries (mutually exclusive)
+  - CSV file (optional in CSV mode): max 10MB, validated CSV structure
+  - Empty student list is allowed (grade scale only)
+  - Degenerate scale combinations are rejected via `calculator.ValidateGradeBounds()`
 - Validation errors returned as `Message{Type: "error", Text: "..."}` in template data
 - ✅ Safe template rendering via `h.executeTemplateSafe()` to catch panics
 
 ### File Upload Processing
 
-Located in `pkg/calculator/ParseStudentFile()`:
+Located in `pkg/calculator/ParseCSVFile()`:
 
 - Accepts `.csv` files up to 10MB
 - Expects header row: `Name,Punkte` (German locale)
-- Numeric validation: points must be floats ≤ maxPoints
+- Numeric validation: points must be floats in range 0-1000
 - Returns `[]models.Student` or error with logging
 - Used only for grade calculation, NOT stored permanently (session-only)
 
@@ -121,7 +128,7 @@ Example (max 45, breakpoint 50% → 22.5): Grade 4 starts at 22.5, grade 5 cover
 
 ### Export Handlers (CSV & Excel)
 
-Three export endpoints (all CSRF-protected):
+Six export endpoints (all CSRF-protected):
 
 1. `/download/grade-scale` - Boundaries as CSV
 2. `/download/student-results` - Student names + grades as CSV
@@ -182,7 +189,7 @@ docker compose up
 
 ### Testing
 
-No unit test files committed; use manual testing or add tests in `*_test.go` files following stdlib patterns:
+Existing unit tests cover calculator, downloads, handlers, security and session packages:
 
 ```bash
 go test ./pkg/calculator -v
@@ -194,7 +201,7 @@ go test ./... -cover
 1. **New calculation variant**: Add to `pkg/calculator/`, call from `HandleHome()`
 2. **New export format**: Add handler in `pkg/downloads/`, register route in `main.go`, wrap with CSRF/security
 3. **New endpoint**: Always wrap with full middleware stack: `securityHeaders(csrf.Handler(rateLimiter.RateLimitMiddleware(...)))`
-4. **New session data**: Use `sessionStore.SetData(sessionID, key, value)` pattern
+4. **New session data**: Use `sessionStore.Set(sessionID, pageData)` pattern
 5. **New error case**: Log with `logging.LogError()` and return `Message{Type: "error", ...}` to template
 
 ### Debugging
@@ -215,8 +222,8 @@ go test ./... -cover
 1. ❌ Adding CSRF tokens to form fields - Go 1.25 validates headers instead
 2. ❌ Using `fmt.Print*` for app events - Always use `logging` package
 3. ❌ Forgetting to wrap handlers with `securityHeaders(csrf.Handler(...))`
-4. ❌ Storing sensitive data in session without understanding 24h timeout
-5. ❌ Hardcoding hostnames in CSRF config - Use env vars for multi-environment support
+4. ❌ Combining CSV and manual student input in one request
+5. ❌ Logging student names in warning/error paths
 6. ❌ Treating session ID as secret - It's logged and should be unpredictable but not encryption-strength
 
 ## Important Files for Reference

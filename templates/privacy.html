@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datenschutz - Notenschluessel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h1,
+        h2 {
+            color: #2c5282;
+        }
+
+        .container {
+            background-color: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 10px;
+            color: #2b6cb0;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Datenschutz</h1>
+
+    <div class="container">
+        <h2>Welche Daten werden verarbeitet?</h2>
+        <p>Die Anwendung verarbeitet nur die eingegebenen Berechnungsparameter (Punktzahl, Schrittweite, Knickpunkt)
+            sowie optional Schülernamen und Punkte.</p>
+
+        <h2>Speicherdauer</h2>
+        <p>Die Daten werden ausschließlich in der Server-Session im Arbeitsspeicher gehalten und automatisch nach 24
+            Stunden gelöscht. Es gibt keine Datenbank.</p>
+
+        <h2>Export und Löschung</h2>
+        <p>Berechnete Daten können als CSV oder Excel exportiert werden. Mit der Funktion "Sitzung jetzt löschen"
+            werden Session und temporäre Daten sofort entfernt.</p>
+
+        <h2>Protokollierung</h2>
+        <p>Für Betrieb und Sicherheit werden technische Ereignisse protokolliert (z. B. Request-Zeit, IP, Fehler,
+            Anzahl der Datensätze). Schülernamen werden dabei nicht in Warn- und Fehlerlogs ausgegeben.</p>
+
+        <a class="back-link" href="/">Zurück zum Rechner</a>
+    </div>
+</body>
+
+</html>

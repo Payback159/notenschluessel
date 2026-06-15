@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"html/template"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/payback159/notenschluessel/pkg/logging"
+	"github.com/payback159/notenschluessel/pkg/models"
 	"github.com/payback159/notenschluessel/pkg/session"
 )
 
@@ -19,8 +22,41 @@ func newTestHandler() *Handler {
 	tmpl := template.Must(template.New("index.html").Parse(
 		`{{if .Message}}<div>{{.Message.Text}}</div>{{end}}` +
 			`{{if .HasResults}}<div>results</div>{{end}}`))
+	template.Must(tmpl.New("privacy.html").Parse(`privacy-page`))
 	store := session.NewStore()
 	return NewHandler(tmpl, store)
+}
+
+func buildMultipartRequest(fields map[string][]string, includeFile bool) (*http.Request, error) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
+	for name, values := range fields {
+		for _, value := range values {
+			if err := writer.WriteField(name, value); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if includeFile {
+		part, err := writer.CreateFormFile("csvFile", "students.csv")
+		if err != nil {
+			return nil, err
+		}
+		_, err = part.Write([]byte("Name,Punkte\nAlice,10\n"))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/", &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req, nil
 }
 
 // --- HandleHome GET ---
@@ -80,6 +116,7 @@ func TestHandleHome_POST_Valid(t *testing.T) {
 		"maxPoints":         "100",
 		"minPoints":         "0.5",
 		"breakPointPercent": "50",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -102,6 +139,7 @@ func TestHandleHome_POST_InvalidMaxPoints(t *testing.T) {
 		"maxPoints":         "-5",
 		"minPoints":         "0.5",
 		"breakPointPercent": "50",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -124,6 +162,7 @@ func TestHandleHome_POST_InvalidBreakPoint(t *testing.T) {
 		"maxPoints":         "100",
 		"minPoints":         "0.5",
 		"breakPointPercent": "150",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -143,6 +182,7 @@ func TestHandleHome_POST_MaxPointsTooHigh(t *testing.T) {
 		"maxPoints":         "9999",
 		"minPoints":         "0.5",
 		"breakPointPercent": "50",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -167,6 +207,7 @@ func TestHandleHome_POST_SetsCookie(t *testing.T) {
 		"maxPoints":         "100",
 		"minPoints":         "0.5",
 		"breakPointPercent": "50",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -202,6 +243,7 @@ func TestHandleHome_POST_InvalidMinPoints(t *testing.T) {
 		"maxPoints":         "100",
 		"minPoints":         "-1",
 		"breakPointPercent": "50",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -221,6 +263,7 @@ func TestHandleHome_POST_InvalidScaleCombination(t *testing.T) {
 		"maxPoints":         "10",
 		"minPoints":         "5",
 		"breakPointPercent": "1",
+		"inputMode":         "csv",
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -237,5 +280,92 @@ func TestHandleHome_POST_InvalidScaleCombination(t *testing.T) {
 	}
 	if strings.Contains(w.Body.String(), "results") {
 		t.Error("invalid scale combination should not render results")
+	}
+}
+
+func TestHandleHome_POST_ManualOnlyValid(t *testing.T) {
+	h := newTestHandler()
+	req, err := buildMultipartRequest(map[string][]string{
+		"maxPoints":         []string{"100"},
+		"minPoints":         []string{"0.5"},
+		"breakPointPercent": []string{"50"},
+		"inputMode":         []string{"manual"},
+		"manualName":        []string{"Alice", "Bob"},
+		"manualPoints":      []string{"80", "45.5"},
+	}, false)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	w := httptest.NewRecorder()
+
+	h.HandleHome(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("want 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "results") {
+		t.Error("response should contain results for manual-only input")
+	}
+}
+
+func TestHandleHome_POST_BothInputModesRejected(t *testing.T) {
+	h := newTestHandler()
+	req, err := buildMultipartRequest(map[string][]string{
+		"maxPoints":         []string{"100"},
+		"minPoints":         []string{"0.5"},
+		"breakPointPercent": []string{"50"},
+		"inputMode":         []string{"manual"},
+		"manualName":        []string{"Alice"},
+		"manualPoints":      []string{"80"},
+	}, true)
+	if err != nil {
+		t.Fatalf("failed to build request: %v", err)
+	}
+	w := httptest.NewRecorder()
+
+	h.HandleHome(w, req)
+
+	if !strings.Contains(w.Body.String(), "nicht erlaubt") {
+		t.Error("response should contain exclusivity error when both inputs are provided")
+	}
+}
+
+func TestHandlePrivacy_GET(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/privacy", nil)
+	w := httptest.NewRecorder()
+
+	h.HandlePrivacy(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /privacy: want 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "privacy-page") {
+		t.Error("privacy template should be rendered")
+	}
+}
+
+func TestHandleDeleteSession_POST(t *testing.T) {
+	store := session.NewStore()
+	tmpl := template.Must(template.New("index.html").Parse(`{{if .Message}}<div>{{.Message.Text}}</div>{{end}}`))
+	template.Must(tmpl.New("privacy.html").Parse(`privacy-page`))
+	h := NewHandler(tmpl, store)
+
+	store.Set("abc123", models.PageData{MaxPoints: 100})
+
+	req := httptest.NewRequest(http.MethodPost, "/session/delete", nil)
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: "abc123"})
+	w := httptest.NewRecorder()
+
+	h.HandleDeleteSession(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("POST /session/delete: want 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "gelöscht") {
+		t.Error("response should contain deletion success message")
+	}
+	if _, exists := store.Get("abc123"); exists {
+		t.Error("session should be removed from store")
 	}
 }

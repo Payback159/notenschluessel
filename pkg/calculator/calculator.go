@@ -256,7 +256,6 @@ func ParseCSVFile(fileHeader *multipart.FileHeader) ([]models.Student, error) {
 			logging.LogWarn("Invalid points value in CSV",
 				"filename", fileHeader.Filename,
 				"row", rowNum,
-				"name", name,
 				"points_str", pointsStr,
 				"error", err.Error())
 			skippedRows++
@@ -268,7 +267,6 @@ func ParseCSVFile(fileHeader *multipart.FileHeader) ([]models.Student, error) {
 			logging.LogWarn("Points value out of reasonable range",
 				"filename", fileHeader.Filename,
 				"row", rowNum,
-				"name", name,
 				"points", points)
 			skippedRows++
 			continue

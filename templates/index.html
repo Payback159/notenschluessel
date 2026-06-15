@@ -41,6 +41,7 @@
         }
 
         input[type="number"],
+        input[type="text"],
         input[type="file"] {
             width: 100%;
             padding: 8px;
@@ -48,6 +49,78 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
+        }
+
+        .input-mode-group {
+            margin-bottom: 15px;
+            padding: 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            background-color: #edf2f7;
+        }
+
+        .input-mode-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .input-mode-options label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: normal;
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .manual-entry-section {
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            background-color: #edf2f7;
+        }
+
+        .manual-row-table {
+            margin-bottom: 10px;
+        }
+
+        .manual-row-table th,
+        .manual-row-table td {
+            padding: 6px;
+        }
+
+        .btn-secondary {
+            background-color: #718096;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4a5568;
+        }
+
+        .btn-danger {
+            background-color: #e53e3e;
+        }
+
+        .btn-danger:hover {
+            background-color: #c53030;
+        }
+
+        .privacy-hint {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #ebf8ff;
+            border-left: 4px solid #3182ce;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .privacy-actions {
+            margin-top: 10px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         /* Button styles - consolidated */
@@ -303,7 +376,23 @@
                     value="{{if .BreakPointPercent}}{{.BreakPointPercent}}{{else}}50{{end}}" required>
             </div>
 
-            <div>
+            <div class="input-mode-group">
+                <label>Eingabemodus für Schülerdaten:</label>
+                <div class="input-mode-options">
+                    <label>
+                        <input type="radio" name="inputMode" value="csv" {{if or (eq .InputMode "" ) (eq
+                            .InputMode "csv" )}}checked{{end}}>
+                        CSV-Import
+                    </label>
+                    <label>
+                        <input type="radio" name="inputMode" value="manual" {{if eq .InputMode "manual"
+                            }}checked{{end}}>
+                        Manuelle Eingabe
+                    </label>
+                </div>
+            </div>
+
+            <div id="csvSection">
                 <div class="label-with-icon">
                     <label for="csvFile">CSV-Datei mit Schülerpunkten (optional):</label>
                     <div class="tooltip-container">
@@ -322,15 +411,59 @@
                             • Erste Zeile enthält die Spaltenüberschriften<br>
                             • Name und Punkte durch Komma getrennt<br>
                             • Dezimalzahlen mit Punkt (nicht Komma)<br>
-                            • Datei muss als .csv gespeichert werden
+                            • Datei muss als .csv gespeichert werden<br>
+                            • Nicht mit manueller Eingabe kombinierbar
                         </div>
                     </div>
                 </div>
                 <input type="file" id="csvFile" name="csvFile" accept=".csv">
             </div>
 
+            <div id="manualSection" class="manual-entry-section">
+                <label>Manuelle Schülerdaten (alternativ zu CSV):</label>
+                <table class="manual-row-table" id="manualTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Punkte</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="manualRows">
+                        {{if .ManualEntries}}
+                        {{range .ManualEntries}}
+                        <tr>
+                            <td><input type="text" name="manualName" value="{{.Name}}"
+                                    placeholder="z.B. Max Mustermann"></td>
+                            <td><input type="text" name="manualPoints" value="{{.Points}}" placeholder="z.B. 38.5"></td>
+                            <td><button type="button" class="btn btn-danger remove-row-btn">Entfernen</button></td>
+                        </tr>
+                        {{end}}
+                        {{else}}
+                        <tr>
+                            <td><input type="text" name="manualName" placeholder="z.B. Max Mustermann"></td>
+                            <td><input type="text" name="manualPoints" placeholder="z.B. 38.5"></td>
+                            <td><button type="button" class="btn btn-danger remove-row-btn">Entfernen</button></td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                <button type="button" class="btn btn-secondary" id="addManualRowBtn">Zeile hinzufügen</button>
+            </div>
+
             <button type="submit">Berechnen</button>
         </form>
+
+        <div class="privacy-hint">
+            Datenschutzhinweis: Die Daten werden nur in der laufenden Sitzung verarbeitet und nach Ablauf automatisch
+            gelöscht.
+            Details unter <a href="/privacy">Datenschutz</a>.
+            <div class="privacy-actions">
+                <form action="/session/delete" method="post">
+                    <button type="submit" class="btn btn-danger">Sitzung jetzt löschen</button>
+                </form>
+            </div>
+        </div>
     </div>
 
     {{if .HasResults}}
@@ -395,6 +528,73 @@
         </div>
     </div>
     {{end}}
+
+    <script>
+        (function () {
+            function createManualRow() {
+                var row = document.createElement("tr");
+                row.innerHTML = '<td><input type="text" name="manualName" placeholder="z.B. Max Mustermann"></td>' +
+                    '<td><input type="text" name="manualPoints" placeholder="z.B. 38.5"></td>' +
+                    '<td><button type="button" class="btn btn-danger remove-row-btn">Entfernen</button></td>';
+                return row;
+            }
+
+            function updateInputModeSections() {
+                var selected = document.querySelector('input[name="inputMode"]:checked');
+                var mode = selected ? selected.value : "csv";
+
+                var csvSection = document.getElementById("csvSection");
+                var manualSection = document.getElementById("manualSection");
+                if (!csvSection || !manualSection) {
+                    return;
+                }
+
+                csvSection.style.display = mode === "csv" ? "block" : "none";
+                manualSection.style.display = mode === "manual" ? "block" : "none";
+            }
+
+            document.querySelectorAll('input[name="inputMode"]').forEach(function (radio) {
+                radio.addEventListener("change", updateInputModeSections);
+            });
+
+            var addBtn = document.getElementById("addManualRowBtn");
+            if (addBtn) {
+                addBtn.addEventListener("click", function () {
+                    var body = document.getElementById("manualRows");
+                    if (!body) {
+                        return;
+                    }
+                    body.appendChild(createManualRow());
+                });
+            }
+
+            document.addEventListener("click", function (event) {
+                if (!event.target.classList.contains("remove-row-btn")) {
+                    return;
+                }
+
+                var body = document.getElementById("manualRows");
+                if (!body) {
+                    return;
+                }
+
+                var rows = body.querySelectorAll("tr");
+                if (rows.length <= 1) {
+                    rows[0].querySelectorAll("input").forEach(function (input) {
+                        input.value = "";
+                    });
+                    return;
+                }
+
+                var row = event.target.closest("tr");
+                if (row) {
+                    row.remove();
+                }
+            });
+
+            updateInputModeSections();
+        })();
+    </script>
 
 </body>
 

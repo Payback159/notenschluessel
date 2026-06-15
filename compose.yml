@@ -3,33 +3,18 @@ services:
     image: ghcr.io/payback159/notenschluessel:latest
     ports:
       - "8080:8080"
-    volumes:
-      # Use tmpfs for temporary files instead of host /tmp
-      - type: tmpfs
-        target: /tmp
-        tmpfs:
-          size: 100M
-          mode: 1777
     restart: unless-stopped
-    
-    # Environment variables
+
     environment:
       - ENV=production
-      # IMPORTANT: Set to your actual domain for CSRF protection
-      - HOSTNAME=notenschluessel.example.com
-    
-    # Security options
+      - STATIC_DIR=/app/dist
+
     security_opt:
       - no-new-privileges:true
     read_only: true
     cap_drop:
       - ALL
-    cap_add:
-      - CHOWN
-      - SETGID
-      - SETUID
-    
-    # Resource limits
+
     deploy:
       resources:
         limits:
@@ -38,16 +23,14 @@ services:
         reservations:
           memory: 64M
           cpus: '0.1'
-    
-    # Health check via /healthz endpoint
+
     healthcheck:
       test: ["CMD", "/app/notenschluessel", "--health-check"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    
-    # Logging configuration
+
     logging:
       driver: "json-file"
       options:
