@@ -1,5 +1,17 @@
 import { GradeBound, GradeBoundsValidationResult } from "../types";
 
+/**
+ * Berechnet die Notengrenzen basierend auf der österreichischen 1–5-Skala.
+ * 
+ * Der Algorithmus verwendet einen "Knickpunkt" (Bestehensschwelle), der durch `breakPointPercent` definiert wird.
+ * Der Bereich zwischen dem Knickpunkt und den Maximalpunkten wird in vier gleich große Segmente unterteilt,
+ * die jeweils einer Note zugeordnet werden. Alle Grenzen werden auf das nächste `minPoints`-Intervall gerundet.
+ * 
+ * @param maxPoints - Die maximale Punktzahl (z. B. 100).
+ * @param minPoints - Das Intervall für die Rundung der Notengrenzen.
+ * @param breakPointPercent - Prozentsatz der Maximalpunktzahl, an dem die Bestehensschwelle (Note 4) liegt.
+ * @returns Ein Array von `GradeBound`-Objekten, die den Bereich für jede Note definieren.
+ */
 export function calculateGradeBounds(
     maxPoints: number,
     minPoints: number,
@@ -33,6 +45,15 @@ export function calculateGradeBounds(
     ];
 }
 
+/**
+ * Validiert die Integrität eines Arrays von Notengrenzen.
+ * 
+ * Prüft, ob alle fünf Noten vorhanden sind, ob die Bereiche innerhalb der Grenzen liegen
+ * und ob es Überschneidungen oder invertierte Intervalle zwischen den Noten gibt.
+ * 
+ * @param gradeBounds - Das Array der zu validierenden `GradeBound`-Objekte.
+ * @returns Ein Objekt mit dem Validierungsstatus (`valid`) und einer Fehlermeldung (`reason`), falls ungültig.
+ */
 export function validateGradeBounds(gradeBounds: GradeBound[]): GradeBoundsValidationResult {
     if (gradeBounds.length !== 5) {
         return { valid: false, reason: "insufficient grade bounds" };
