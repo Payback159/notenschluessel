@@ -1,16 +1,16 @@
 import { GradeBound, GradeBoundsValidationResult } from "../types";
 
 /**
- * Berechnet die Notengrenzen basierend auf der österreichischen 1–5-Skala.
+ * Calculates grade boundaries based on the Austrian 1–5 scale.
  * 
- * Der Algorithmus verwendet einen "Knickpunkt" (Bestehensschwelle), der durch `breakPointPercent` definiert wird.
- * Der Bereich zwischen dem Knickpunkt und den Maximalpunkten wird in vier gleich große Segmente unterteilt,
- * die jeweils einer Note zugeordnet werden. Alle Grenzen werden auf das nächste `minPoints`-Intervall gerundet.
+ * The algorithm uses a "break point" (passing threshold), defined by `breakPointPercent`.
+ * The area between the break point and the maximum points is divided into four equal segments,
+ * each assigned to a grade. All boundaries are rounded to the nearest `minPoints` interval.
  * 
- * @param maxPoints - Die maximale Punktzahl (z. B. 100).
- * @param minPoints - Das Intervall für die Rundung der Notengrenzen.
- * @param breakPointPercent - Prozentsatz der Maximalpunktzahl, an dem die Bestehensschwelle (Note 4) liegt.
- * @returns Ein Array von `GradeBound`-Objekten, die den Bereich für jede Note definieren.
+ * @param maxPoints - The maximum possible score (e.g., 100).
+ * @param minPoints - The rounding interval for the grade boundaries.
+ * @param breakPointPercent - Percentage of the maximum score where the passing threshold (Grade 4) lies.
+ * @returns An array of `GradeBound` objects defining the range for each grade.
  */
 export function calculateGradeBounds(
     maxPoints: number,
@@ -46,13 +46,13 @@ export function calculateGradeBounds(
 }
 
 /**
- * Validiert die Integrität eines Arrays von Notengrenzen.
+ * Validates the integrity of an array of grade boundaries.
  * 
- * Prüft, ob alle fünf Noten vorhanden sind, ob die Bereiche innerhalb der Grenzen liegen
- * und ob es Überschneidungen oder invertierte Intervalle zwischen den Noten gibt.
+ * Checks if all five grades are present, whether ranges are within bounds,
+ * and ensures there are no overlaps or inverted intervals between grades.
  * 
- * @param gradeBounds - Das Array der zu validierenden `GradeBound`-Objekte.
- * @returns Ein Objekt mit dem Validierungsstatus (`valid`) und einer Fehlermeldung (`reason`), falls ungültig.
+ * @param gradeBounds - The array of `GradeBound` objects to validate.
+ * @returns An object containing the validation status (`valid`) and an error message (`reason`), if invalid.
  */
 export function validateGradeBounds(gradeBounds: GradeBound[]): GradeBoundsValidationResult {
     if (gradeBounds.length !== 5) {
