@@ -1,5 +1,17 @@
 import { GradeBound, GradeBoundsValidationResult } from "../types";
 
+/**
+ * Calculates grade boundaries based on the Austrian 1–5 scale.
+ * 
+ * The algorithm uses a "break point" (passing threshold), defined by `breakPointPercent`.
+ * The area between the break point and the maximum points is divided into four equal segments,
+ * each assigned to a grade. All boundaries are rounded to the nearest `minPoints` interval.
+ * 
+ * @param maxPoints - The maximum possible score (e.g., 100).
+ * @param minPoints - The rounding interval for the grade boundaries.
+ * @param breakPointPercent - Percentage of the maximum score where the passing threshold (Grade 4) lies.
+ * @returns An array of `GradeBound` objects defining the range for each grade.
+ */
 export function calculateGradeBounds(
     maxPoints: number,
     minPoints: number,
@@ -33,6 +45,15 @@ export function calculateGradeBounds(
     ];
 }
 
+/**
+ * Validates the integrity of an array of grade boundaries.
+ * 
+ * Checks if all five grades are present, whether ranges are within bounds,
+ * and ensures there are no overlaps or inverted intervals between grades.
+ * 
+ * @param gradeBounds - The array of `GradeBound` objects to validate.
+ * @returns An object containing the validation status (`valid`) and an error message (`reason`), if invalid.
+ */
 export function validateGradeBounds(gradeBounds: GradeBound[]): GradeBoundsValidationResult {
     if (gradeBounds.length !== 5) {
         return { valid: false, reason: "insufficient grade bounds" };
