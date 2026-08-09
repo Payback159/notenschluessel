@@ -411,7 +411,7 @@ export interface CSVParseResult {
 
 - [ ] **Step 4: Rewrite the parser body**
 
-In `src/parsers/csvParser.ts`, replace the imports and `parseCSVContent`. `sanitizeName` and `parseCSVLine` stay unchanged for now (Task 12 moves `sanitizeName`).
+In `src/parsers/csvParser.ts`, replace the imports and `parseCSVContent`. `sanitizeName` and `parseCSVLine` stay unchanged for now (Task 11 moves `sanitizeName`).
 
 ```ts
 import { LIMITS } from "../constants";
@@ -512,7 +512,7 @@ Note the ordering change: the limit is now checked **before** pushing, so exactl
 - [ ] **Step 5: Run tests and type-check**
 
 Run: `npx vitest run tests/unit/csvParser.test.ts && npm run type-check`
-Expected: PASS. `npm run test` insgesamt schlägt noch fehl — `workflow.ts` liest `result.errors`. Das ist erwartet und wird in Task 7 behoben.
+Expected: PASS. `npm run test` insgesamt schlägt noch fehl — `workflow.ts` liest `result.errors`. Das ist erwartet und wird in Task 6 behoben.
 
 - [ ] **Step 6: Commit**
 
@@ -937,7 +937,7 @@ In `src/types.ts`, delete `ValidationResult` and `GradeBoundsValidationResult`.
 - [ ] **Step 7: Run tests and type-check**
 
 Run: `npx vitest run tests/unit/validation.test.ts tests/unit/calculator.test.ts && npm run type-check`
-Expected: Tests PASS. `npm run type-check` meldet weiterhin Fehler in `workflow.ts` — erwartet, Task 7 behebt sie.
+Expected: Tests PASS. `npm run type-check` meldet weiterhin Fehler in `workflow.ts` — erwartet, Task 6 behebt sie.
 
 - [ ] **Step 8: Commit**
 
