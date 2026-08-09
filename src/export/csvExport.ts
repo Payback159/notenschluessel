@@ -77,12 +77,21 @@ export function exportCombinedCSV(
 }
 
 /**
- * Prepends a UTF-8 BOM so Excel on Windows reads umlauts correctly. It sits here
- * rather than in the export functions so their return values stay plain strings
- * that tests can assert on directly.
+ * Prepends a UTF-8 BOM so Excel on Windows reads umlauts correctly. Extracted
+ * as its own pure function, rather than inlined in `triggerTextDownload`, so a
+ * test can assert on the BOM directly instead of just on the Blob it ends up
+ * inside of.
+ */
+export function withBom(content: string): string {
+    return `\uFEFF${content}`;
+}
+
+/**
+ * It sits in `withBom` rather than in the export functions above so their
+ * return values stay plain strings that tests can assert on directly.
  */
 export function triggerTextDownload(content: string, filename: string, mimeType: string): void {
-    const blob = new Blob([`\uFEFF${content}`], { type: mimeType });
+    const blob = new Blob([withBom(content)], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;

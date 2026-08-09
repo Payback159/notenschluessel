@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exportStudentResultsCSV } from "../../src/export/csvExport";
+import { exportStudentResultsCSV, withBom } from "../../src/export/csvExport";
 import { parseCSVContent } from "../../src/parsers/csvParser";
 
 describe("csv round trip", () => {
@@ -18,11 +18,20 @@ describe("csv round trip", () => {
     });
 
     it("reads its own export back even with a leading BOM", () => {
-        const csv = `\uFEFF${exportStudentResultsCSV(students, 0.5)}`;
+        const csv = withBom(exportStudentResultsCSV(students, 0.5));
         const parsed = parseCSVContent(csv);
 
         expect(parsed.diagnostics).toHaveLength(0);
         expect(parsed.students.map((s) => s.name)).toEqual(["Müller", "Öz"]);
+    });
+
+    it("withBom prepends exactly one U+FEFF", () => {
+        const content = "Name;Punkte;Note";
+        const withMark = withBom(content);
+
+        expect(withMark).toBe(`\uFEFF${content}`);
+        expect(withMark.codePointAt(0)).toBe(0xfeff);
+        expect(withMark.slice(1)).toBe(content);
     });
 
     it("round-trips 20 students whose names each contain two commas", () => {
