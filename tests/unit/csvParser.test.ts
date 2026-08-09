@@ -11,6 +11,22 @@ describe("csv parser", () => {
         expect(detectDelimiter("Name;Punkte\nAlice;12")).toBe(";");
     });
 
+    it("detects the delimiter from a single line without a header", () => {
+        expect(detectDelimiter("Alice,12")).toBe(",");
+        expect(detectDelimiter("Alice;12")).toBe(";");
+    });
+
+    it("is not fooled by commas inside names that outnumber the semicolon delimiters", () => {
+        // Reproduces the review finding: a semicolon-delimited export with
+        // decimal-comma points and names containing two commas each used to tip
+        // the old raw-character-count heuristic towards comma after ~3 rows.
+        const lines = ["Name;Punkte;Note"];
+        for (let i = 0; i < 20; i++) {
+            lines.push(`Nachname${i}, Vorname${i}, Jr.;76,5;2`);
+        }
+        expect(detectDelimiter(lines.join("\n"))).toBe(";");
+    });
+
     it("parses valid csv and records the source row", () => {
         const result = parseCSVContent("Name,Punkte\nAlice,95\nBob,42.5");
         expect(result.diagnostics).toHaveLength(0);

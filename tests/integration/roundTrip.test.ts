@@ -24,4 +24,24 @@ describe("csv round trip", () => {
         expect(parsed.diagnostics).toHaveLength(0);
         expect(parsed.students.map((s) => s.name)).toEqual(["Müller", "Öz"]);
     });
+
+    it("round-trips 20 students whose names each contain two commas", () => {
+        // The review finding: names like "Nachname, Vorname, Jr." push the raw
+        // comma count above the semicolon count after only a few rows, so the old
+        // statistical detectDelimiter misread the app's own semicolon export as
+        // comma-delimited and produced zero students.
+        const manyStudents = Array.from({ length: 20 }, (_, i) => ({
+            name: `Nachname${i}, Vorname${i}, Jr.`,
+            points: 76.5,
+            grade: 2
+        }));
+
+        const csv = exportStudentResultsCSV(manyStudents, 0.5);
+        const parsed = parseCSVContent(csv);
+
+        expect(parsed.diagnostics).toHaveLength(0);
+        expect(parsed.students).toHaveLength(20);
+        expect(parsed.students.map((s) => s.name)).toEqual(manyStudents.map((s) => s.name));
+        expect(parsed.students.every((s) => s.points === 76.5)).toBe(true);
+    });
 });

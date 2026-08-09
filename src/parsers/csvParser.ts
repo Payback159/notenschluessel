@@ -38,11 +38,47 @@ function parseCSVLine(line: string, delimiter: string): string[] {
     return fields;
 }
 
+const DELIMITER_CANDIDATES = [",", ";"] as const;
+const DELIMITER_SAMPLE_LINES = 5;
+
+/**
+ * Picks the delimiter structurally instead of by counting raw characters.
+ *
+ * Counting `,` and `;` across the first kilobyte breaks on the app's own export:
+ * a semicolon-delimited row with a decimal comma and a name containing commas
+ * (e.g. "Nachname, Vorname, Jr.") contributes as many commas as semicolons, and a
+ * few such rows tip the raw count towards comma even though the file is
+ * semicolon-delimited. Splitting each candidate with the real quote-aware parser
+ * and requiring a consistent field count of at least two per line is immune to
+ * that, because a wrong delimiter almost never produces the same field count on
+ * every sampled line.
+ */
 export function detectDelimiter(content: string): "," | ";" {
-    const sample = content.slice(0, 1024);
-    const commaCount = (sample.match(/,/g) ?? []).length;
-    const semicolonCount = (sample.match(/;/g) ?? []).length;
-    return semicolonCount > commaCount ? ";" : ",";
+    const sampleLines = content
+        .split(/\r?\n/)
+        .filter((line) => line.trim() !== "")
+        .slice(0, DELIMITER_SAMPLE_LINES);
+
+    let best: { delimiter: "," | ";"; fields: number } | undefined;
+
+    for (const delimiter of DELIMITER_CANDIDATES) {
+        const fieldCounts = sampleLines.map((line) => parseCSVLine(line, delimiter).length);
+        const first = fieldCounts[0];
+        if (first === undefined || first < 2) {
+            continue;
+        }
+
+        const consistent = fieldCounts.every((count) => count === first);
+        if (!consistent) {
+            continue;
+        }
+
+        if (!best || first > best.fields) {
+            best = { delimiter, fields: first };
+        }
+    }
+
+    return best?.delimiter ?? ",";
 }
 
 export function parseCSVContent(rawContent: string): CSVParseResult {
