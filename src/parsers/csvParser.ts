@@ -7,19 +7,8 @@ import {
     rowTooFewColumns,
     rowUnparsablePoints
 } from "../core/diagnostics";
+import { sanitizeName } from "../core/sanitize";
 import { CSVParseResult, Diagnostic, Student } from "../types";
-
-function sanitizeName(name: string): string {
-    let result = name.replaceAll("<", "").replaceAll(">", "");
-    result = result.replaceAll("\n", " ").replaceAll("\r", " ").replaceAll("\t", " ");
-    result = result.trim();
-
-    if (result.length > LIMITS.maxNameLength) {
-        return result.slice(0, LIMITS.maxNameLength);
-    }
-
-    return result;
-}
 
 function parseCSVLine(line: string, delimiter: string): string[] {
     const fields: string[] = [];

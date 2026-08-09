@@ -6,19 +6,8 @@ import {
     rowNegativePoints,
     rowUnparsablePoints
 } from "../core/diagnostics";
+import { sanitizeName } from "../core/sanitize";
 import { Diagnostic, ManualEntry, ManualParseResult, Student } from "../types";
-
-function sanitizeName(name: string): string {
-    let result = name.replaceAll("<", "").replaceAll(">", "");
-    result = result.replaceAll("\n", " ").replaceAll("\r", " ").replaceAll("\t", " ");
-    result = result.trim();
-
-    if (result.length > LIMITS.maxNameLength) {
-        return result.slice(0, LIMITS.maxNameLength);
-    }
-
-    return result;
-}
 
 export function hasNonEmptyManualEntries(entries: ManualEntry[]): boolean {
     return entries.some((entry) => entry.name.trim() !== "" || entry.points.trim() !== "");

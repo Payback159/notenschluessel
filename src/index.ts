@@ -3,6 +3,7 @@ export * from "./constants";
 export * from "./core/calculator";
 export * from "./core/diagnostics";
 export * from "./core/grading";
+export * from "./core/sanitize";
 export * from "./core/studentValidation";
 export * from "./core/validation";
 export * from "./parsers/csvParser";
