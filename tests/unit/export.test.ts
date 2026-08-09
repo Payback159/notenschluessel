@@ -33,8 +33,19 @@ describe("export modules", () => {
     });
 
     it("still prefixes formula characters", () => {
+        // Quoted, not bare: dropping the `guarded !== field` re-check would leave
+        // this field unquoted even though it was prefixed.
         const csv = exportStudentResultsCSV([{ name: "=cmd", points: 45, grade: 1 }], 0.5);
-        expect(csv).toContain("'=cmd");
+        const dataLine = csv.split("\n")[1];
+        expect(dataLine).toBeDefined();
+        expect(dataLine).toBe(`"'=cmd";45;1`);
+    });
+
+    it("doubles embedded quotes when escaping a field", () => {
+        const csv = exportStudentResultsCSV([{ name: 'Bob "Bobby" Smith', points: 30, grade: 3 }], 0.5);
+        const dataLine = csv.split("\n")[1];
+        expect(dataLine).toBeDefined();
+        expect(dataLine).toBe(`"Bob ""Bobby"" Smith";30;3`);
     });
 
     it("uses semicolons and a decimal comma", () => {
