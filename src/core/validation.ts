@@ -1,19 +1,20 @@
 import { LIMITS } from "../constants";
-import { InputMode, ValidationResult } from "../types";
+import { inputModeConflict, inputModeMismatch, invalidCoreInput } from "./diagnostics";
+import { Diagnostic, InputMode } from "../types";
 
 export function validateCoreInputs(
     maxPoints: number,
     minPoints: number,
     breakPointPercent: number
-): ValidationResult {
-    const errors: string[] = [];
+): Diagnostic[] {
+    const diagnostics: Diagnostic[] = [];
 
     if (!Number.isInteger(maxPoints) || maxPoints <= 0 || maxPoints > LIMITS.maxPoints) {
-        errors.push("Ungueltige maximale Punktzahl (1-1000 erlaubt)");
+        diagnostics.push(invalidCoreInput("Ungültige maximale Punktzahl (1-1000 erlaubt)"));
     }
 
     if (!Number.isFinite(minPoints) || minPoints <= 0 || minPoints > maxPoints) {
-        errors.push("Ungueltige Punkteschrittweite");
+        diagnostics.push(invalidCoreInput("Ungültige Punkteschrittweite"));
     }
 
     if (
@@ -21,26 +22,27 @@ export function validateCoreInputs(
         breakPointPercent < LIMITS.minBreakPointPercent ||
         breakPointPercent > LIMITS.maxBreakPointPercent
     ) {
-        errors.push("Ungueltiger Knickpunkt (1-99% erlaubt)");
+        diagnostics.push(invalidCoreInput("Ungültiger Knickpunkt (1-99% erlaubt)"));
     }
 
-    return { valid: errors.length === 0, errors };
+    return diagnostics;
 }
 
-export function validateInputModeExclusivity(
+export function validateInputMode(
     inputMode: InputMode,
     csvProvided: boolean,
     manualProvided: boolean
-): ValidationResult {
-    const errors: string[] = [];
-
-    if (inputMode !== "csv" && inputMode !== "manual") {
-        errors.push("Ungueltiger Eingabemodus");
-    }
-
+): Diagnostic[] {
     if (csvProvided && manualProvided) {
-        errors.push("Bitte entweder CSV-Import oder manuelle Eingabe verwenden. Eine Kombination ist nicht erlaubt.");
+        return [inputModeConflict()];
     }
 
-    return { valid: errors.length === 0, errors };
+    const activeProvided = inputMode === "csv" ? csvProvided : manualProvided;
+    const otherProvided = inputMode === "csv" ? manualProvided : csvProvided;
+
+    if (!activeProvided && otherProvided) {
+        return [inputModeMismatch(inputMode)];
+    }
+
+    return [];
 }
