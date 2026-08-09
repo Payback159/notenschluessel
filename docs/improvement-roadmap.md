@@ -39,4 +39,4 @@ Dieses Dokument dient als Sammlung und Priorisierung von Verbesserungsvorschläg
 *CI/CD Pipeline ist umgesetzt (`.github/workflows/ci.yml`), inklusive Lint-Schritt.*
 
 ---
-*Stand: 2026-06-21*
+*Stand: 2026-08-09*
