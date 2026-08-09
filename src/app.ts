@@ -205,11 +205,19 @@ function setupInputModeToggle(): void {
 
 function setupExports(): void {
     getById<HTMLButtonElement>("downloadScaleCsvBtn").addEventListener("click", () => {
-        triggerTextDownload(exportGradeScaleCSV(state.gradeBounds), "grade-scale.csv", "text/csv;charset=utf-8;");
+        triggerTextDownload(
+            exportGradeScaleCSV(state.gradeBounds, state.minPoints),
+            "grade-scale.csv",
+            "text/csv;charset=utf-8;"
+        );
     });
 
     getById<HTMLButtonElement>("downloadStudentsCsvBtn").addEventListener("click", () => {
-        triggerTextDownload(exportStudentResultsCSV(state.students), "student-results.csv", "text/csv;charset=utf-8;");
+        triggerTextDownload(
+            exportStudentResultsCSV(state.students, state.minPoints),
+            "student-results.csv",
+            "text/csv;charset=utf-8;"
+        );
     });
 
     getById<HTMLButtonElement>("downloadCombinedCsvBtn").addEventListener("click", () => {

@@ -24,18 +24,37 @@ describe("export modules", () => {
         { name: "Alice", points: 22.5, grade: 4 }
     ];
 
-    it("exports grade scale csv", () => {
-        const csv = exportGradeScaleCSV(bounds);
-        expect(csv).toContain("Note,Untergrenze,Obergrenze");
+    it("keeps a dangerous name in a single field even when it contains the delimiter", () => {
+        // The old code returned early after prefixing, so the delimiter split the row.
+        const csv = exportStudentResultsCSV([{ name: "=Mueller; Hans", points: 90, grade: 1 }], 0.5);
+        const dataLine = csv.split("\n")[1];
+        expect(dataLine).toBeDefined();
+        expect(dataLine).toBe(`"'=Mueller; Hans";90;1`);
     });
 
-    it("sanitizes csv fields for student export", () => {
-        const csv = exportStudentResultsCSV(students);
+    it("still prefixes formula characters", () => {
+        const csv = exportStudentResultsCSV([{ name: "=cmd", points: 45, grade: 1 }], 0.5);
         expect(csv).toContain("'=cmd");
     });
 
+    it("uses semicolons and a decimal comma", () => {
+        const csv = exportStudentResultsCSV([{ name: "Alice", points: 76.5, grade: 2 }], 0.5);
+        expect(csv.split("\n")[0]).toBe("Name;Punkte;Note");
+        expect(csv).toContain("Alice;76,5;2");
+    });
+
+    it("exports the grade scale with semicolons", () => {
+        const csv = exportGradeScaleCSV(bounds, 0.5);
+        expect(csv.split("\n")[0]).toBe("Note;Untergrenze;Obergrenze");
+        expect(csv).toContain("1;39,5;45");
+    });
+
     it("exports combined csv", () => {
-        const csv = exportCombinedCSV(bounds, students, { maxPoints: 45, minPoints: 0.5, breakPointPercent: 50 });
+        const csv = exportCombinedCSV(bounds, students, {
+            maxPoints: 45,
+            minPoints: 0.5,
+            breakPointPercent: 50
+        });
         expect(csv).toContain("## Notenskala");
         expect(csv).toContain("## Schüler");
     });
