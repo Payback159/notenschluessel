@@ -84,9 +84,10 @@ if (mode === "csv") {
 - `maxPoints`: Pflicht, positive Ganzzahl, max 1000
 - `minPoints`: Pflicht, positive Zahl, ≤ maxPoints
 - `breakPointPercent`: 1–99
-- CSV und Manuell sind gegenseitig ausschließend
-- Degenerate Skalen werden via `validateGradeBounds()` abgefangen
-- Validierungsfehler: `showMessage("error", ...)` in der UI
+- Punktzahlen über `maxPoints` → `points-exceed-max` (Abbruch), geprüft in `src/core/studentValidation.ts`
+- CSV und Manuell sind gegenseitig ausschließend; Daten im nicht gewählten Modus → `input-mode-mismatch`
+- Alle Meldungen entstehen als `Diagnostic` in `src/core/diagnostics.ts`, nie als roher String
+- `severity: "warning"` rechnet weiter, `severity: "error"` bricht ab
 
 ### Notenfarben (Single Source of Truth)
 
@@ -193,6 +194,9 @@ Mit `breakAbs = maxPoints * breakPointPercent/100` und `segment = (maxPoints - b
 5. ❌ CSV und Manuell gleichzeitig übergeben – gegenseitig ausschließend
 6. ❌ Beim Mode-Umschalten alte Eingabedaten nicht leeren – führt zu falschem Validierungsfehler
 7. ❌ Security-Header nur im Server-Block definieren – in nginx nested `location`-Blöcken müssen `add_header` wiederholt werden
+8. ❌ Zahlen mit `toFixed()` formatieren – immer `formatPoints()` aus `src/ui/format.ts`, sonst weicht die Anzeige bei Schrittweite 0,25 von der Berechnung ab
+9. ❌ Diagnose-Texte an der Fundstelle zusammenbauen – Factories in `src/core/diagnostics.ts` verwenden
+10. ❌ Werte per `innerHTML` in Tabellen schreiben – `src/ui/render.ts` setzt ausschließlich `textContent`
 
 ## Wichtige Dateien
 

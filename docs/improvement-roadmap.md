@@ -17,7 +17,7 @@ Dieses Dokument dient als Sammlung und Priorisierung von Verbesserungsvorschläg
 
 | Feature                            | Beschreibung                                                                                  | Priorität | Aufwand |
 | :--------------------------------- | :-------------------------------------------------------------------------------------------- | :-------- | :------ |
-| **Detailliertere Fehlermeldungen** | Einführung spezifischer Error-Typen für Validierung und Parsing statt generischer Meldungen.  | Mittel    | Gering  |
+| ~~**Detailliertere Fehlermeldungen**~~ | Erledigt: strukturierte `Diagnostic`-Typen mit Severity und Zeilennummer. | – | – |
 | **Dokumentation (JSDoc)**          | Ausführliche mathematische Dokumentation der Berechnungslogik in `src/core/calculator.ts`.    | Hoch      | Gering  |
 | **Web Worker**                     | Auslagerung der Berechnung in einen Web Worker bei sehr großen Datensätzen zur UI-Entlastung. | Niedrig   | Mittel  |
 
@@ -35,6 +35,8 @@ Dieses Dokument dient als Sammlung und Priorisierung von Verbesserungsvorschläg
 | :------------------------- | :-------------------------------------------------------------------------------------- | :-------- | :------ |
 | **CI/CD Pipeline**         | Automatisierte Tests (`npm run test`) und Typ-Checks bei jedem Push via GitHub Actions. | Hoch      | Gering  |
 | **E2E-Tests (Playwright)** | Testen des kritischen Workflows: Import $\rightarrow$ Berechnung $\rightarrow$ Export.  | Mittel    | Mittel  |
+
+*CI/CD Pipeline ist umgesetzt (`.github/workflows/ci.yml`), inklusive Lint-Schritt.*
 
 ---
 *Stand: 2026-06-21*

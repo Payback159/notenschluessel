@@ -24,13 +24,21 @@ Browser auf http://localhost:5173 – fertig.
 ### CSV-Format
 
 ```csv
-Name,Punkte
-Max Mustermann,85.5
-Anna Schmidt,76.0
-Tom Weber,92.5
+Name;Punkte
+Max Mustermann;85,5
+Anna Schmidt;76,0
+Tom Weber;92,5
 ```
 
-Punkt als Dezimaltrennzeichen. Semikolon als Spaltentrenner geht auch. Max. 10 MB.
+Beim Import werden Semikolon und Komma als Spaltentrenner erkannt, als Dezimaltrennzeichen
+sowohl Komma als auch Punkt. Max. 10 MB.
+
+Exportierte Dateien verwenden Semikolon und Dezimalkomma und beginnen mit einem UTF-8-BOM –
+so öffnen sie sich in Excel per Doppelklick korrekt, samt Umlauten.
+
+Zeilen, die nicht gelesen werden können, werden übersprungen und einzeln mit Zeilennummer
+gemeldet. Eine Punktzahl über der eingegebenen Maximalpunktzahl bricht die Berechnung ab,
+da es sich fast immer um einen Tippfehler handelt.
 
 ## Unter der Haube
 
@@ -55,7 +63,7 @@ notenschluessel/
 ```
 
 Dependencies:
-- [xlsx](https://www.npmjs.com/package/xlsx) – Excel-Export direkt im Browser
+- [xlsx-js-style](https://www.npmjs.com/package/xlsx-js-style) – Excel-Export mit Zellfarben direkt im Browser
 
 ## Sicherheit
 
