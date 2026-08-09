@@ -118,15 +118,12 @@ describe("diagnostics", () => {
         expect(hasErrors([])).toBe(false);
     });
 
-    it("uses correct German umlauts in messages", () => {
-        expect(rowMissingNameMessageHasUmlaut()).toBe(true);
+    it("writes umlauts properly instead of transliterating them", () => {
+        // Guards against the "Ungueltige"/"gefaehrlich" style used elsewhere in the codebase.
+        expect(pointsExceedMax(1, 2, 1).message).toContain("über");
+        expect(rowUnparsablePoints(1, "x").message).toContain("übersprungen");
     });
 });
-
-function rowMissingNameMessageHasUmlaut(): boolean {
-    // Guards against the "Ungueltige" style that exists in the current codebase.
-    return !/ue[a-z]|ae[a-z]|oe[a-z]/.test(pointsExceedMax(1, 2, 1).message);
-}
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
