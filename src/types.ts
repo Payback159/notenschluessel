@@ -55,8 +55,7 @@ export interface GradeBoundsValidationResult {
 
 export interface CSVParseResult {
     students: Student[];
-    skippedRows: number;
-    errors: string[];
+    diagnostics: Diagnostic[];
 }
 
 export interface ManualParseResult {

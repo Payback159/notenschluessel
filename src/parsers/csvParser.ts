@@ -1,5 +1,13 @@
 import { LIMITS } from "../constants";
-import { CSVParseResult, Student } from "../types";
+import {
+    noValidStudents,
+    rowLimitReached,
+    rowMissingName,
+    rowNegativePoints,
+    rowTooFewColumns,
+    rowUnparsablePoints
+} from "../core/diagnostics";
+import { CSVParseResult, Diagnostic, Student } from "../types";
 
 function sanitizeName(name: string): string {
     let result = name.replaceAll("<", "").replaceAll(">", "");
@@ -50,42 +58,34 @@ export function detectDelimiter(content: string): "," | ";" {
 
 export function parseCSVContent(content: string): CSVParseResult {
     const students: Student[] = [];
-    const errors: string[] = [];
-    let skippedRows = 0;
+    const diagnostics: Diagnostic[] = [];
 
     if (content.trim() === "") {
-        return { students: [], skippedRows: 0, errors: ["Leere CSV-Datei"] };
+        return { students: [], diagnostics: [noValidStudents()] };
     }
 
     const delimiter = detectDelimiter(content);
     const lines = content.split(/\r?\n/);
+    let limitReached = false;
 
-    for (let rowNum = 0; rowNum < lines.length; rowNum++) {
-        const line = lines[rowNum];
-        if (line === undefined) {
+    for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+        if (line === undefined || line.trim() === "") {
             continue;
         }
 
-        if (line.trim() === "") {
-            continue;
-        }
-
+        // 1-based line number as the teacher sees it in an editor.
+        const row = index + 1;
         const record = parseCSVLine(line, delimiter);
-
         const col0 = record[0];
         const col1 = record[1];
 
-        if (rowNum === 0 && col0 !== undefined && col0.trim().toLowerCase() === "name") {
+        if (index === 0 && col0 !== undefined && col0.trim().toLowerCase() === "name") {
             continue;
         }
 
-        if (record.length < 2) {
-            skippedRows++;
-            continue;
-        }
-
-        if (col0 === undefined || col1 === undefined) {
-            skippedRows++;
+        if (record.length < 2 || col0 === undefined || col1 === undefined) {
+            diagnostics.push(rowTooFewColumns(row));
             continue;
         }
 
@@ -97,36 +97,42 @@ export function parseCSVContent(content: string): CSVParseResult {
         }
 
         if (name === "") {
-            skippedRows++;
+            diagnostics.push(rowMissingName(row));
             continue;
         }
 
-        const pointsStr = rawPoints.replaceAll(",", ".");
-        const points = Number.parseFloat(pointsStr);
+        const points = Number.parseFloat(rawPoints.replaceAll(",", "."));
 
         if (!Number.isFinite(points)) {
-            skippedRows++;
+            diagnostics.push(rowUnparsablePoints(row, rawPoints));
             continue;
         }
 
-        if (points < 0 || points > LIMITS.maxPoints) {
-            skippedRows++;
+        if (points < 0) {
+            diagnostics.push(rowNegativePoints(row, points));
             continue;
         }
 
-        students.push({
-            name: sanitizeName(name),
-            points
-        });
+        if (points > LIMITS.maxPoints) {
+            diagnostics.push(rowUnparsablePoints(row, rawPoints));
+            continue;
+        }
 
         if (students.length >= LIMITS.maxStudents) {
+            limitReached = true;
             break;
         }
+
+        students.push({ name: sanitizeName(name), points, sourceRow: row });
     }
 
-    if (students.length === 0) {
-        errors.push("Keine gültigen Schülerdaten in CSV gefunden");
+    if (limitReached) {
+        diagnostics.push(rowLimitReached(LIMITS.maxStudents));
     }
 
-    return { students, skippedRows, errors };
+    if (students.length === 0 && !limitReached) {
+        diagnostics.push(noValidStudents());
+    }
+
+    return { students, diagnostics };
 }
