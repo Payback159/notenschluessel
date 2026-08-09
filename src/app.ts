@@ -49,13 +49,37 @@ function readFileAsText(file: File): Promise<string> {
     });
 }
 
+function manualInputCell(name: string, value: string): HTMLTableCellElement {
+    const td = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = name;
+    input.value = value;
+    td.appendChild(input);
+    return td;
+}
+
+/**
+ * Builds the row via createElement and sets input values through the `value`
+ * property, not markup — an innerHTML sink here would only be safe today
+ * because every call site passes no arguments, and a future caller passing a
+ * restored name would otherwise land in an unescaped attribute context.
+ */
 function addManualRow(name = "", points = ""): void {
     const rows = getById<HTMLTableSectionElement>("manualRows");
     const tr = document.createElement("tr");
-    tr.innerHTML =
-        `<td><input type="text" name="manualName" value="${name.replaceAll('"', '&quot;')}" /></td>` +
-        `<td><input type="text" name="manualPoints" value="${points.replaceAll('"', '&quot;')}" /></td>` +
-        `<td><button type="button" class="remove-row">Entfernen</button></td>`;
+
+    tr.appendChild(manualInputCell("manualName", name));
+    tr.appendChild(manualInputCell("manualPoints", points));
+
+    const buttonCell = document.createElement("td");
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "remove-row";
+    removeButton.textContent = "Entfernen";
+    buttonCell.appendChild(removeButton);
+    tr.appendChild(buttonCell);
+
     rows.appendChild(tr);
 }
 
