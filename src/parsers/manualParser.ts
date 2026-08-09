@@ -1,5 +1,12 @@
 import { LIMITS } from "../constants";
-import { ManualEntry, ManualParseResult, Student } from "../types";
+import {
+    rowLimitReached,
+    rowMissingName,
+    rowMissingPoints,
+    rowNegativePoints,
+    rowUnparsablePoints
+} from "../core/diagnostics";
+import { Diagnostic, ManualEntry, ManualParseResult, Student } from "../types";
 
 function sanitizeName(name: string): string {
     let result = name.replaceAll("<", "").replaceAll(">", "");
@@ -19,7 +26,8 @@ export function hasNonEmptyManualEntries(entries: ManualEntry[]): boolean {
 
 export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
     const students: Student[] = [];
-    const errors: string[] = [];
+    const diagnostics: Diagnostic[] = [];
+    let limitReached = false;
 
     for (let i = 0; i < entries.length; i++) {
         const entry = entries[i];
@@ -27,6 +35,7 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
             continue;
         }
 
+        const row = i + 1;
         const name = entry.name.trim();
         const pointsRaw = entry.points.trim();
 
@@ -35,36 +44,43 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
         }
 
         if (name === "") {
-            errors.push(`Zeile ${i + 1}: Name fehlt`);
+            diagnostics.push(rowMissingName(row));
             continue;
         }
 
         if (pointsRaw === "") {
-            errors.push(`Zeile ${i + 1}: Punkte fehlen`);
+            diagnostics.push(rowMissingPoints(row));
             continue;
         }
 
         const points = Number.parseFloat(pointsRaw.replaceAll(",", "."));
+
         if (!Number.isFinite(points)) {
-            errors.push(`Zeile ${i + 1}: Ungueltige Punktzahl`);
+            diagnostics.push(rowUnparsablePoints(row, pointsRaw));
             continue;
         }
 
-        if (points < 0 || points > LIMITS.maxPoints) {
-            errors.push(`Zeile ${i + 1}: Punktzahl ausserhalb des erlaubten Bereichs (0-1000)`);
+        if (points < 0) {
+            diagnostics.push(rowNegativePoints(row, points));
             continue;
         }
 
-        students.push({
-            name: sanitizeName(name),
-            points
-        });
-
-        if (students.length > LIMITS.maxStudents) {
-            errors.push(`Zu viele Schülerdaten (maximal ${LIMITS.maxStudents})`);
-            return { students: [], errors };
+        if (points > LIMITS.maxPoints) {
+            diagnostics.push(rowUnparsablePoints(row, pointsRaw));
+            continue;
         }
+
+        if (students.length >= LIMITS.maxStudents) {
+            limitReached = true;
+            break;
+        }
+
+        students.push({ name: sanitizeName(name), points, sourceRow: row });
     }
 
-    return { students, errors };
+    if (limitReached) {
+        diagnostics.push(rowLimitReached(LIMITS.maxStudents));
+    }
+
+    return { students, diagnostics };
 }

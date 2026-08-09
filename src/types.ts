@@ -60,5 +60,5 @@ export interface CSVParseResult {
 
 export interface ManualParseResult {
     students: Student[];
-    errors: string[];
+    diagnostics: Diagnostic[];
 }
