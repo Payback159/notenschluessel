@@ -69,4 +69,10 @@ describe("csv parser", () => {
         const result = parseCSVContent("Name,Punkte\n<bad>,10");
         expect(result.students[0]?.name).toBe("bad");
     });
+
+    it("ignores a leading BOM when detecting the header", () => {
+        const result = parseCSVContent("\uFEFFName,Punkte\nAlice,95");
+        expect(result.students).toHaveLength(1);
+        expect(result.students[0]?.name).toBe("Alice");
+    });
 });

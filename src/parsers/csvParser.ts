@@ -56,7 +56,10 @@ export function detectDelimiter(content: string): "," | ";" {
     return semicolonCount > commaCount ? ";" : ",";
 }
 
-export function parseCSVContent(content: string): CSVParseResult {
+export function parseCSVContent(rawContent: string): CSVParseResult {
+    // A file exported by this app starts with a BOM so Excel reads it as UTF-8.
+    const content = rawContent.startsWith("\uFEFF") ? rawContent.slice(1) : rawContent;
+
     const students: Student[] = [];
     const diagnostics: Diagnostic[] = [];
 
