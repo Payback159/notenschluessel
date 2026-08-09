@@ -10,7 +10,8 @@ import {
     buildStudentsWorkbook,
     triggerWorkbookDownload
 } from "./export/excelExport";
-import { ManualEntry } from "./types";
+import { Diagnostic, ManualEntry } from "./types";
+import { renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
 import { runCalculationWorkflow } from "./ui/workflow";
 
 interface AppState {
@@ -74,50 +75,39 @@ function collectManualEntries(): ManualEntry[] {
     return entries;
 }
 
-function showMessage(type: "error" | "success", text: string): void {
+function showMessage(type: "error" | "success", text: string, diagnostics: Diagnostic[] = []): void {
     const msg = getById<HTMLDivElement>("message");
     msg.classList.remove("hidden", "error", "success");
     msg.classList.add(type);
-    msg.textContent = text;
+    getById<HTMLParagraphElement>("messageText").textContent = text;
+    renderDiagnostics(getById<HTMLUListElement>("diagnosticList"), diagnostics);
 }
 
 function hideMessage(): void {
     const msg = getById<HTMLDivElement>("message");
     msg.classList.add("hidden");
-    msg.textContent = "";
+    getById<HTMLParagraphElement>("messageText").textContent = "";
+    renderDiagnostics(getById<HTMLUListElement>("diagnosticList"), []);
 }
 
 function renderResults(): void {
-    const scaleCard = getById<HTMLDivElement>("gradeScaleCard");
-    const studentsCard = getById<HTMLDivElement>("studentsCard");
-    const scaleBody = getById<HTMLTableSectionElement>("gradeScaleBody");
-    const studentsBody = getById<HTMLTableSectionElement>("studentsBody");
+    renderGradeScale(
+        getById<HTMLTableSectionElement>("gradeScaleBody"),
+        state.gradeBounds,
+        state.minPoints
+    );
+    renderStudents(
+        getById<HTMLTableSectionElement>("studentsBody"),
+        state.students,
+        state.minPoints
+    );
+
     const average = getById<HTMLHeadingElement>("averageGrade");
+    average.textContent =
+        state.students.length > 0 ? `Notendurchschnitt: ${state.averageGrade.toFixed(2)}` : "";
 
-    scaleBody.innerHTML = "";
-    for (const bound of state.gradeBounds) {
-        const tr = document.createElement("tr");
-        tr.className = `grade-${bound.grade}`;
-        tr.innerHTML = `<td>${bound.grade}</td><td>${bound.lowerBound.toFixed(1)} - ${bound.upperBound.toFixed(1)}</td>`;
-        scaleBody.appendChild(tr);
-    }
-
-    studentsBody.innerHTML = "";
-    for (const student of state.students) {
-        const tr = document.createElement("tr");
-        if (student.grade) {
-            tr.className = `grade-${student.grade}`;
-        }
-        tr.innerHTML = `<td>${student.name}</td><td>${student.points.toFixed(1)}</td><td>${student.grade ?? ""}</td>`;
-        studentsBody.appendChild(tr);
-    }
-
-    average.textContent = state.students.length > 0
-        ? `Notendurchschnitt: ${state.averageGrade.toFixed(2)}`
-        : "";
-
-    scaleCard.classList.toggle("hidden", state.gradeBounds.length === 0);
-    studentsCard.classList.toggle("hidden", state.students.length === 0);
+    getById<HTMLDivElement>("gradeScaleCard").classList.toggle("hidden", state.gradeBounds.length === 0);
+    getById<HTMLDivElement>("studentsCard").classList.toggle("hidden", state.students.length === 0);
 }
 
 function resetInputs(): void {
@@ -164,7 +154,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     });
 
     if (!result.ok) {
-        showMessage("error", result.diagnostics.map((d) => d.message).join(" "));
+        showMessage("error", "Die Berechnung wurde abgebrochen.", result.diagnostics);
         state.gradeBounds = [];
         state.students = [];
         state.averageGrade = 0;
@@ -181,7 +171,11 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
 
     sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
     renderResults();
-    showMessage("success", "Berechnung abgeschlossen.");
+    showMessage(
+        "success",
+        summaryLine(result.students.length, result.diagnostics.length > 0),
+        result.diagnostics
+    );
 }
 
 function setupInputModeToggle(): void {
