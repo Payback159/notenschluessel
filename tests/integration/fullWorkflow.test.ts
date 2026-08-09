@@ -101,6 +101,24 @@ describe("full workflow", () => {
         expect(exceed?.message).toContain("855");
     });
 
+    it("keeps accumulated warnings alongside the fatal error when it aborts", () => {
+        const result = runCalculationWorkflow({
+            maxPoints: 100,
+            minPoints: 0.5,
+            breakPointPercent: 50,
+            inputMode: "csv",
+            csvContent: "Name,Punkte\nAlice,95\nKaputt\nBob,999",
+            manualEntries: []
+        });
+
+        expect(result.ok).toBe(false);
+
+        const warning = result.diagnostics.find((d) => d.code === "row-too-few-columns");
+        const error = result.diagnostics.find((d) => d.code === "points-exceed-max");
+        expect(warning?.severity).toBe("warning");
+        expect(error?.severity).toBe("error");
+    });
+
     it("reports an unusable scale", () => {
         const result = runCalculationWorkflow({
             maxPoints: 1,
