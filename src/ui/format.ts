@@ -34,6 +34,16 @@ export function formatNumberDe(value: number, decimals: number): string {
     return trimmed.replace(".", ",");
 }
 
+/**
+ * Formats a number German-style with a fixed decimal count, keeping trailing
+ * zeros. `formatNumberDe` trims them, which is right for point values but wrong
+ * for a metric like the average grade: an average of exactly 2 should read
+ * "2,00", not "2", or it looks less precise than a neighbouring "1,33".
+ */
+export function formatFixedNumberDe(value: number, decimals: number): string {
+    return value.toFixed(decimals).replace(".", ",");
+}
+
 export function formatPoints(value: number, minPoints: number): string {
     return formatNumberDe(value, decimalsFor(minPoints));
 }

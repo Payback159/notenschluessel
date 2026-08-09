@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decimalsFor, formatNumberDe, formatPoints, formatRange } from "../../src/ui/format";
+import { decimalsFor, formatFixedNumberDe, formatNumberDe, formatPoints, formatRange } from "../../src/ui/format";
 import { calculateGradeBounds } from "../../src/core/calculator";
 
 describe("decimalsFor", () => {
@@ -20,6 +20,15 @@ describe("formatNumberDe", () => {
         expect(formatNumberDe(76.5, 1)).toBe("76,5");
         expect(formatNumberDe(100, 0)).toBe("100");
         expect(formatNumberDe(33.25, 2)).toBe("33,25");
+    });
+});
+
+describe("formatFixedNumberDe", () => {
+    it("keeps trailing zeros instead of trimming them away", () => {
+        // formatNumberDe would render 2 as "2"; the average grade needs "2,00" so
+        // it does not look less precise than a neighbouring "1,33".
+        expect(formatFixedNumberDe(2, 2)).toBe("2,00");
+        expect(formatFixedNumberDe(1.33333, 2)).toBe("1,33");
     });
 });
 

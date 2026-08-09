@@ -11,7 +11,7 @@ import {
     triggerWorkbookDownload
 } from "./export/excelExport";
 import { Diagnostic, ManualEntry } from "./types";
-import { renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
+import { renderAverage, renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
 import { runCalculationWorkflow } from "./ui/workflow";
 
 interface AppState {
@@ -102,9 +102,11 @@ function renderResults(): void {
         state.minPoints
     );
 
-    const average = getById<HTMLHeadingElement>("averageGrade");
-    average.textContent =
-        state.students.length > 0 ? `Notendurchschnitt: ${state.averageGrade.toFixed(2)}` : "";
+    renderAverage(
+        getById<HTMLHeadingElement>("averageGrade"),
+        state.averageGrade,
+        state.students.length > 0
+    );
 
     getById<HTMLDivElement>("gradeScaleCard").classList.toggle("hidden", state.gradeBounds.length === 0);
     getById<HTMLDivElement>("studentsCard").classList.toggle("hidden", state.students.length === 0);

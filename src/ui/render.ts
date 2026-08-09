@@ -1,4 +1,4 @@
-import { formatPoints, formatRange } from "./format";
+import { formatFixedNumberDe, formatPoints, formatRange } from "./format";
 import { Diagnostic, GradeBound, Student } from "../types";
 
 /** Errors first, then warnings; within a group the original order is kept. */
@@ -48,6 +48,21 @@ export function renderStudents(
         tr.appendChild(cell(student.grade === undefined ? "" : String(student.grade)));
         tbody.appendChild(tr);
     }
+}
+
+/**
+ * Renders the average grade with exactly two decimals, German-style. Uses
+ * `formatFixedNumberDe` rather than `formatNumberDe`: the latter trims trailing
+ * zeros, which would render an average of exactly 2 as "2" instead of "2,00".
+ */
+export function renderAverage(
+    heading: HTMLHeadingElement,
+    averageGrade: number,
+    hasStudents: boolean
+): void {
+    heading.textContent = hasStudents
+        ? `Notendurchschnitt: ${formatFixedNumberDe(averageGrade, 2)}`
+        : "";
 }
 
 export function renderDiagnostics(list: HTMLUListElement, diagnostics: Diagnostic[]): void {
