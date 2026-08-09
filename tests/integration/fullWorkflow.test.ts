@@ -63,6 +63,55 @@ describe("full workflow", () => {
         });
 
         expect(result.ok).toBe(false);
-        expect(result.errors.join(" ")).toContain("Kombination");
+        expect(result.diagnostics.map((d) => d.message).join(" ")).toContain("Kombination");
+    });
+
+    it("calculates the remaining students and warns about every skipped row", () => {
+        const result = runCalculationWorkflow({
+            maxPoints: 100,
+            minPoints: 0.5,
+            breakPointPercent: 50,
+            inputMode: "csv",
+            csvContent: "Name,Punkte\nAlice,95\nKaputt\nBob,abc\nCharlie,20",
+            manualEntries: []
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.students).toHaveLength(2);
+        expect(result.diagnostics).toHaveLength(2);
+        expect(result.diagnostics.every((d) => d.severity === "warning")).toBe(true);
+    });
+
+    it("aborts when a score exceeds the maximum, naming the row", () => {
+        const result = runCalculationWorkflow({
+            maxPoints: 100,
+            minPoints: 0.5,
+            breakPointPercent: 50,
+            inputMode: "csv",
+            csvContent: "Name,Punkte\nTippfehler,855\nNormal,85.5",
+            manualEntries: []
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.students).toHaveLength(0);
+        expect(result.gradeBounds).toHaveLength(0);
+
+        const exceed = result.diagnostics.find((d) => d.code === "points-exceed-max");
+        expect(exceed?.row).toBe(2);
+        expect(exceed?.message).toContain("855");
+    });
+
+    it("reports an unusable scale", () => {
+        const result = runCalculationWorkflow({
+            maxPoints: 1,
+            minPoints: 1,
+            breakPointPercent: 99,
+            inputMode: "csv",
+            csvContent: "",
+            manualEntries: []
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.diagnostics.some((d) => d.code === "degenerate-scale")).toBe(true);
     });
 });

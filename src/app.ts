@@ -164,7 +164,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     });
 
     if (!result.ok) {
-        showMessage("error", result.errors.join(" "));
+        showMessage("error", result.diagnostics.map((d) => d.message).join(" "));
         state.gradeBounds = [];
         state.students = [];
         state.averageGrade = 0;
