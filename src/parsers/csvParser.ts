@@ -105,11 +105,6 @@ export function parseCSVContent(rawContent: string): CSVParseResult {
             continue;
         }
 
-        if (points > LIMITS.maxPoints) {
-            diagnostics.push(rowUnparsablePoints(row, rawPoints));
-            continue;
-        }
-
         if (students.length >= LIMITS.maxStudents) {
             limitReached = true;
             break;

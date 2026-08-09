@@ -54,11 +54,6 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
             continue;
         }
 
-        if (points > LIMITS.maxPoints) {
-            diagnostics.push(rowUnparsablePoints(row, pointsRaw));
-            continue;
-        }
-
         if (students.length >= LIMITS.maxStudents) {
             limitReached = true;
             break;

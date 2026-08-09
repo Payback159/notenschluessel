@@ -101,6 +101,28 @@ describe("full workflow", () => {
         expect(exceed?.message).toContain("855");
     });
 
+    it("aborts on a typo above the absolute ceiling too, instead of silently continuing", () => {
+        // 1055 is a worse typo than 855, but used to slip past the parser's own
+        // LIMITS.maxPoints check with a false "not a number" warning and let the
+        // calculation continue with the remaining students.
+        const result = runCalculationWorkflow({
+            maxPoints: 100,
+            minPoints: 0.5,
+            breakPointPercent: 50,
+            inputMode: "csv",
+            csvContent: "Name,Punkte\nTippfehler,1055\nNormal,85.5",
+            manualEntries: []
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.students).toHaveLength(0);
+        expect(result.gradeBounds).toHaveLength(0);
+
+        const exceed = result.diagnostics.find((d) => d.code === "points-exceed-max");
+        expect(exceed?.row).toBe(2);
+        expect(exceed?.message).toContain("1055");
+    });
+
     it("keeps accumulated warnings alongside the fatal error when it aborts", () => {
         const result = runCalculationWorkflow({
             maxPoints: 100,
