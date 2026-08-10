@@ -27,6 +27,38 @@ describe("csv parser", () => {
         expect(detectDelimiter(lines.join("\n"))).toBe(";");
     });
 
+    it("is not fooled by comma-laden names when the header row is missing", () => {
+        // Without the header the comma splits every row into a consistent four
+        // fields while the correct semicolon yields three, so picking by field
+        // count alone would choose the comma and drop all rows.
+        const lines: string[] = [];
+        for (let i = 0; i < 5; i++) {
+            lines.push(`Nachname${i}, Vorname${i}, Jr.;76,5;2`);
+        }
+        const result = parseCSVContent(lines.join("\n"));
+        expect(result.diagnostics).toHaveLength(0);
+        expect(result.students).toHaveLength(5);
+        expect(result.students[0]?.name).toBe("Nachname0, Vorname0, Jr.");
+        expect(result.students[0]?.points).toBe(76.5);
+    });
+
+    it("does not split a header-less semicolon file on its decimal commas", () => {
+        // "Müller;76,5" also splits into a usable ["Müller;76", "5"] under the
+        // comma, so this used to import silently wrong data: no diagnostic, but
+        // the name carried the points and the points were the decimals.
+        const result = parseCSVContent("Müller;76,5\nÖz;88,5\nBauer;91,5");
+        expect(result.diagnostics).toHaveLength(0);
+        expect(result.students).toHaveLength(3);
+        expect(result.students[0]).toEqual({ name: "Müller", points: 76.5, sourceRow: 1 });
+    });
+
+    it("still reads a header-less comma file as comma-delimited", () => {
+        const result = parseCSVContent("Alice,95\nBob,42.5");
+        expect(result.diagnostics).toHaveLength(0);
+        expect(result.students).toHaveLength(2);
+        expect(result.students[1]).toEqual({ name: "Bob", points: 42.5, sourceRow: 2 });
+    });
+
     it("parses valid csv and records the source row", () => {
         const result = parseCSVContent("Name,Punkte\nAlice,95\nBob,42.5");
         expect(result.diagnostics).toHaveLength(0);

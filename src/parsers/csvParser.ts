@@ -42,6 +42,15 @@ const DELIMITER_CANDIDATES = [",", ";"] as const;
 const DELIMITER_SAMPLE_LINES = 5;
 
 /**
+ * Reads a points field the way the import loop does: German decimal comma first,
+ * then float. Shared with `detectDelimiter` so a delimiter is judged by the very
+ * rule that later decides whether a row is usable.
+ */
+function parsePointsField(raw: string): number {
+    return Number.parseFloat(raw.trim().replaceAll(",", "."));
+}
+
+/**
  * Picks the delimiter structurally instead of by counting raw characters.
  *
  * Counting `,` and `;` across the first kilobyte breaks on the app's own export:
@@ -52,29 +61,70 @@ const DELIMITER_SAMPLE_LINES = 5;
  * and requiring a consistent field count of at least two per line is immune to
  * that, because a wrong delimiter almost never produces the same field count on
  * every sampled line.
+ *
+ * Field count alone is still not enough. Without a header row, splitting
+ * "Nachname, Vorname, Jr.;76,5;2" on the comma yields a consistent four fields
+ * while the correct semicolon yields three, so "more fields wins" would pick the
+ * comma and lose every row. The number of rows whose second field actually reads
+ * as a points value therefore decides first.
+ *
+ * That still leaves a tie for a header-less semicolon file whose points all carry
+ * a decimal comma: "Müller;76,5" splits into a usable ["Müller;76", "5"] under the
+ * comma too. So a name field that swallowed the rival delimiter counts against a
+ * candidate — it is the tell-tale of a wrong split. Field count only breaks what
+ * is left.
  */
+interface DelimiterScore {
+    usableRows: number;
+    cleanNames: number;
+    fields: number;
+}
+
+function outranks(candidate: DelimiterScore, incumbent: DelimiterScore): boolean {
+    if (candidate.usableRows !== incumbent.usableRows) {
+        return candidate.usableRows > incumbent.usableRows;
+    }
+    if (candidate.cleanNames !== incumbent.cleanNames) {
+        return candidate.cleanNames > incumbent.cleanNames;
+    }
+    return candidate.fields > incumbent.fields;
+}
+
 export function detectDelimiter(content: string): "," | ";" {
     const sampleLines = content
         .split(/\r?\n/)
         .filter((line) => line.trim() !== "")
         .slice(0, DELIMITER_SAMPLE_LINES);
 
-    let best: { delimiter: "," | ";"; fields: number } | undefined;
+    let best: { delimiter: "," | ";"; score: DelimiterScore } | undefined;
 
     for (const delimiter of DELIMITER_CANDIDATES) {
-        const fieldCounts = sampleLines.map((line) => parseCSVLine(line, delimiter).length);
-        const first = fieldCounts[0];
+        const records = sampleLines.map((line) => parseCSVLine(line, delimiter));
+        const first = records[0]?.length;
         if (first === undefined || first < 2) {
             continue;
         }
 
-        const consistent = fieldCounts.every((count) => count === first);
+        const consistent = records.every((record) => record.length === first);
         if (!consistent) {
             continue;
         }
 
-        if (!best || first > best.fields) {
-            best = { delimiter, fields: first };
+        const rivals = DELIMITER_CANDIDATES.filter((candidate) => candidate !== delimiter);
+        const score: DelimiterScore = {
+            usableRows: records.filter((record) => {
+                const rawPoints = record[1];
+                return rawPoints !== undefined && Number.isFinite(parsePointsField(rawPoints));
+            }).length,
+            cleanNames: records.filter((record) => {
+                const name = record[0];
+                return name !== undefined && !rivals.some((rival) => name.includes(rival));
+            }).length,
+            fields: first
+        };
+
+        if (!best || outranks(score, best.score)) {
+            best = { delimiter, score };
         }
     }
 
@@ -129,7 +179,7 @@ export function parseCSVContent(rawContent: string): CSVParseResult {
             continue;
         }
 
-        const points = Number.parseFloat(rawPoints.replaceAll(",", "."));
+        const points = parsePointsField(rawPoints);
 
         if (!Number.isFinite(points)) {
             diagnostics.push(rowUnparsablePoints(row, rawPoints));
