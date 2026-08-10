@@ -1,4 +1,5 @@
-import { GradeBound, GradeBoundsValidationResult } from "../types";
+import { degenerateScale } from "./diagnostics";
+import { Diagnostic, GradeBound } from "../types";
 
 /**
  * Calculates grade boundaries based on the Austrian 1–5 scale.
@@ -47,38 +48,31 @@ export function calculateGradeBounds(
 
 /**
  * Validates the integrity of an array of grade boundaries.
- * 
- * Checks if all five grades are present, whether ranges are within bounds,
- * and ensures there are no overlaps or inverted intervals between grades.
- * 
+ *
+ * Checks that all five grades are present and that no range is inverted or
+ * overlaps its neighbour.
+ *
  * @param gradeBounds - The array of `GradeBound` objects to validate.
- * @returns An object containing the validation status (`valid`) and an error message (`reason`), if invalid.
+ * @returns An empty array if the scale is usable, otherwise a single error diagnostic.
  */
-export function validateGradeBounds(gradeBounds: GradeBound[]): GradeBoundsValidationResult {
+export function validateGradeBounds(gradeBounds: GradeBound[]): Diagnostic[] {
     if (gradeBounds.length !== 5) {
-        return { valid: false, reason: "insufficient grade bounds" };
+        return [degenerateScale()];
     }
 
     for (const bound of gradeBounds) {
         if (bound.upperBound < bound.lowerBound) {
-            return { valid: false, reason: `grade ${bound.grade} has inverted range` };
+            return [degenerateScale()];
         }
     }
 
     for (let i = 1; i < gradeBounds.length; i++) {
         const current = gradeBounds[i];
         const previous = gradeBounds[i - 1];
-        if (!current || !previous) {
-            return { valid: false, reason: "insufficient grade bounds" };
-        }
-
-        if (current.upperBound >= previous.lowerBound) {
-            return {
-                valid: false,
-                reason: `grade ${current.grade} overlaps with grade ${previous.grade}`
-            };
+        if (!current || !previous || current.upperBound >= previous.lowerBound) {
+            return [degenerateScale()];
         }
     }
 
-    return { valid: true, reason: "" };
+    return [];
 }

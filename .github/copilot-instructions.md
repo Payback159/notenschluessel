@@ -84,9 +84,10 @@ if (mode === "csv") {
 - `maxPoints`: Pflicht, positive Ganzzahl, max 1000
 - `minPoints`: Pflicht, positive Zahl, ≤ maxPoints
 - `breakPointPercent`: 1–99
-- CSV und Manuell sind gegenseitig ausschließend
-- Degenerate Skalen werden via `validateGradeBounds()` abgefangen
-- Validierungsfehler: `showMessage("error", ...)` in der UI
+- Punktzahlen über `maxPoints` → `points-exceed-max` (Abbruch), geprüft in `src/core/studentValidation.ts`
+- CSV und Manuell sind gegenseitig ausschließend; Daten im nicht gewählten Modus → `input-mode-mismatch`
+- Alle Meldungen entstehen als `Diagnostic` in `src/core/diagnostics.ts`, nie als roher String
+- `severity: "warning"` rechnet weiter, `severity: "error"` bricht ab
 
 ### Notenfarben (Single Source of Truth)
 
@@ -107,11 +108,14 @@ export const GRADE_COLORS = {
 
 ### CSV-Injection-Schutz
 
-Im CSV-Export werden gefährliche Zeichen am Zeilenanfang escaped:
+Im CSV-Export werden gefährliche Zeichen am Zeilenanfang mit `'` maskiert; enthält das Feld
+danach das Trennzeichen, ein Anführungszeichen, einen Zeilenumbruch oder wurde es bereits
+maskiert, wird es zusätzlich in Anführungszeichen gesetzt. Beide Schritte laufen nacheinander,
+nicht alternativ:
 
 ```ts
 // src/export/csvExport.ts
-function sanitizeCSVValue(value: string): string { ... }
+function sanitizeCSVField(field: string): string { ... }
 ```
 
 ## Project Structure
@@ -124,10 +128,14 @@ notenschluessel/
 ├── src/
 │   ├── app.ts                     # DOM-Controller, Form-Handling, Exports
 │   ├── constants.ts               # LIMITS, GRADE_COLORS (Single Source of Truth)
+│   ├── index.ts                   # Barrel-Export der öffentlichen API
 │   ├── types.ts                   # Shared TypeScript-Interfaces
 │   ├── core/
 │   │   ├── calculator.ts          # Notengrenz-Berechnung
+│   │   ├── diagnostics.ts         # Diagnostic-Factories (Severity, Code, Zeilennummer)
 │   │   ├── grading.ts             # Schüler-Benotung und Durchschnitt
+│   │   ├── sanitize.ts            # Sanitizing von Namen (entfernt <>, Steuerzeichen, kürzt Länge)
+│   │   ├── studentValidation.ts   # Punktzahlen gegen maxPoints prüfen (points-exceed-max)
 │   │   └── validation.ts          # Eingabe- und Modus-Validierung
 │   ├── parsers/
 │   │   ├── csvParser.ts           # CSV-Parsing mit Delimiter-Erkennung
@@ -136,6 +144,8 @@ notenschluessel/
 │   │   ├── csvExport.ts           # CSV-Export mit Injection-Schutz
 │   │   └── excelExport.ts         # XLSX-Export mit Notenfarben
 │   └── ui/
+│       ├── format.ts              # Zahlenformatierung (Dezimalkomma, Nachkommastellen aus minPoints)
+│       ├── render.ts              # DOM-Rendering der Ergebnistabelle, ausschließlich via textContent
 │       └── workflow.ts            # Orchestrierung: Validierung → Parsing → Berechnung
 ├── tests/
 │   ├── unit/                      # calculator, grading, validation, csvParser, manualParser, export
@@ -193,12 +203,19 @@ Mit `breakAbs = maxPoints * breakPointPercent/100` und `segment = (maxPoints - b
 5. ❌ CSV und Manuell gleichzeitig übergeben – gegenseitig ausschließend
 6. ❌ Beim Mode-Umschalten alte Eingabedaten nicht leeren – führt zu falschem Validierungsfehler
 7. ❌ Security-Header nur im Server-Block definieren – in nginx nested `location`-Blöcken müssen `add_header` wiederholt werden
+8. ❌ Zahlen mit `toFixed()` formatieren – immer `formatPoints()` aus `src/ui/format.ts`, sonst weicht die Anzeige bei Schrittweite 0,25 von der Berechnung ab
+9. ❌ Diagnose-Texte an der Fundstelle zusammenbauen – Factories in `src/core/diagnostics.ts` verwenden
+10. ❌ Werte per `innerHTML` in Tabellen schreiben – `src/ui/render.ts` setzt ausschließlich `textContent`
 
 ## Wichtige Dateien
 
 - **Algorithmus**: `src/core/calculator.ts`
 - **Validierung**: `src/core/validation.ts`
+- **Diagnosen (Meldungs-Factories)**: `src/core/diagnostics.ts`
+- **Punktzahl-Prüfung gegen Maximum**: `src/core/studentValidation.ts`
 - **Notenfarben (Basis)**: `src/constants.ts` → `GRADE_COLORS`
+- **Zahlenformatierung**: `src/ui/format.ts`
+- **Ergebnistabelle rendern**: `src/ui/render.ts`
 - **Excel-Export**: `src/export/excelExport.ts`
 - **DOM-Controller**: `src/app.ts`
 - **CSS-Theme**: `style.css`

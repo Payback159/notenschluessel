@@ -29,25 +29,23 @@ describe("calculateGradeBounds", () => {
 
 describe("validateGradeBounds", () => {
     it("accepts valid bounds", () => {
-        const bounds = calculateGradeBounds(100, 0.5, 50);
-        expect(validateGradeBounds(bounds)).toEqual({ valid: true, reason: "" });
+        expect(validateGradeBounds(calculateGradeBounds(100, 0.5, 50))).toHaveLength(0);
     });
 
     it("rejects insufficient bounds", () => {
-        expect(validateGradeBounds([])).toEqual({
-            valid: false,
-            reason: "insufficient grade bounds"
-        });
+        const d = validateGradeBounds([]);
+        expect(d.some((x) => x.code === "degenerate-scale")).toBe(true);
     });
 
     it("rejects inverted ranges", () => {
-        const result = validateGradeBounds([
+        const d = validateGradeBounds([
             { grade: 1, lowerBound: 50, upperBound: 40 },
             { grade: 2, lowerBound: 30, upperBound: 39 },
             { grade: 3, lowerBound: 20, upperBound: 29 },
             { grade: 4, lowerBound: 10, upperBound: 19 },
             { grade: 5, lowerBound: 0, upperBound: 9 }
         ]);
-        expect(result.valid).toBe(false);
+        expect(d).toHaveLength(1);
+        expect(d[0]?.code).toBe("degenerate-scale");
     });
 });

@@ -10,7 +10,8 @@ import {
     buildStudentsWorkbook,
     triggerWorkbookDownload
 } from "./export/excelExport";
-import { ManualEntry } from "./types";
+import { Diagnostic, ManualEntry } from "./types";
+import { renderAverage, renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
 import { runCalculationWorkflow } from "./ui/workflow";
 
 interface AppState {
@@ -48,13 +49,37 @@ function readFileAsText(file: File): Promise<string> {
     });
 }
 
+function manualInputCell(name: string, value: string): HTMLTableCellElement {
+    const td = document.createElement("td");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.name = name;
+    input.value = value;
+    td.appendChild(input);
+    return td;
+}
+
+/**
+ * Builds the row via createElement and sets input values through the `value`
+ * property, not markup — an innerHTML sink here would only be safe today
+ * because every call site passes no arguments, and a future caller passing a
+ * restored name would otherwise land in an unescaped attribute context.
+ */
 function addManualRow(name = "", points = ""): void {
     const rows = getById<HTMLTableSectionElement>("manualRows");
     const tr = document.createElement("tr");
-    tr.innerHTML =
-        `<td><input type="text" name="manualName" value="${name.replaceAll('"', '&quot;')}" /></td>` +
-        `<td><input type="text" name="manualPoints" value="${points.replaceAll('"', '&quot;')}" /></td>` +
-        `<td><button type="button" class="remove-row">Entfernen</button></td>`;
+
+    tr.appendChild(manualInputCell("manualName", name));
+    tr.appendChild(manualInputCell("manualPoints", points));
+
+    const buttonCell = document.createElement("td");
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "remove-row";
+    removeButton.textContent = "Entfernen";
+    buttonCell.appendChild(removeButton);
+    tr.appendChild(buttonCell);
+
     rows.appendChild(tr);
 }
 
@@ -74,50 +99,41 @@ function collectManualEntries(): ManualEntry[] {
     return entries;
 }
 
-function showMessage(type: "error" | "success", text: string): void {
+function showMessage(type: "error" | "success", text: string, diagnostics: Diagnostic[] = []): void {
     const msg = getById<HTMLDivElement>("message");
     msg.classList.remove("hidden", "error", "success");
     msg.classList.add(type);
-    msg.textContent = text;
+    getById<HTMLParagraphElement>("messageText").textContent = text;
+    renderDiagnostics(getById<HTMLUListElement>("diagnosticList"), diagnostics);
 }
 
 function hideMessage(): void {
     const msg = getById<HTMLDivElement>("message");
     msg.classList.add("hidden");
-    msg.textContent = "";
+    getById<HTMLParagraphElement>("messageText").textContent = "";
+    renderDiagnostics(getById<HTMLUListElement>("diagnosticList"), []);
 }
 
 function renderResults(): void {
-    const scaleCard = getById<HTMLDivElement>("gradeScaleCard");
-    const studentsCard = getById<HTMLDivElement>("studentsCard");
-    const scaleBody = getById<HTMLTableSectionElement>("gradeScaleBody");
-    const studentsBody = getById<HTMLTableSectionElement>("studentsBody");
-    const average = getById<HTMLHeadingElement>("averageGrade");
+    renderGradeScale(
+        getById<HTMLTableSectionElement>("gradeScaleBody"),
+        state.gradeBounds,
+        state.minPoints
+    );
+    renderStudents(
+        getById<HTMLTableSectionElement>("studentsBody"),
+        state.students,
+        state.minPoints
+    );
 
-    scaleBody.innerHTML = "";
-    for (const bound of state.gradeBounds) {
-        const tr = document.createElement("tr");
-        tr.className = `grade-${bound.grade}`;
-        tr.innerHTML = `<td>${bound.grade}</td><td>${bound.lowerBound.toFixed(1)} - ${bound.upperBound.toFixed(1)}</td>`;
-        scaleBody.appendChild(tr);
-    }
+    renderAverage(
+        getById<HTMLHeadingElement>("averageGrade"),
+        state.averageGrade,
+        state.students.length > 0
+    );
 
-    studentsBody.innerHTML = "";
-    for (const student of state.students) {
-        const tr = document.createElement("tr");
-        if (student.grade) {
-            tr.className = `grade-${student.grade}`;
-        }
-        tr.innerHTML = `<td>${student.name}</td><td>${student.points.toFixed(1)}</td><td>${student.grade ?? ""}</td>`;
-        studentsBody.appendChild(tr);
-    }
-
-    average.textContent = state.students.length > 0
-        ? `Notendurchschnitt: ${state.averageGrade.toFixed(2)}`
-        : "";
-
-    scaleCard.classList.toggle("hidden", state.gradeBounds.length === 0);
-    studentsCard.classList.toggle("hidden", state.students.length === 0);
+    getById<HTMLDivElement>("gradeScaleCard").classList.toggle("hidden", state.gradeBounds.length === 0);
+    getById<HTMLDivElement>("studentsCard").classList.toggle("hidden", state.students.length === 0);
 }
 
 function resetInputs(): void {
@@ -164,7 +180,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     });
 
     if (!result.ok) {
-        showMessage("error", result.errors.join(" "));
+        showMessage("error", "Die Berechnung wurde abgebrochen.", result.diagnostics);
         state.gradeBounds = [];
         state.students = [];
         state.averageGrade = 0;
@@ -181,7 +197,11 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
 
     sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
     renderResults();
-    showMessage("success", "Berechnung abgeschlossen.");
+    showMessage(
+        "success",
+        summaryLine(result.students.length, result.diagnostics.length > 0),
+        result.diagnostics
+    );
 }
 
 function setupInputModeToggle(): void {
@@ -211,11 +231,19 @@ function setupInputModeToggle(): void {
 
 function setupExports(): void {
     getById<HTMLButtonElement>("downloadScaleCsvBtn").addEventListener("click", () => {
-        triggerTextDownload(exportGradeScaleCSV(state.gradeBounds), "grade-scale.csv", "text/csv;charset=utf-8;");
+        triggerTextDownload(
+            exportGradeScaleCSV(state.gradeBounds, state.minPoints),
+            "grade-scale.csv",
+            "text/csv;charset=utf-8;"
+        );
     });
 
     getById<HTMLButtonElement>("downloadStudentsCsvBtn").addEventListener("click", () => {
-        triggerTextDownload(exportStudentResultsCSV(state.students), "student-results.csv", "text/csv;charset=utf-8;");
+        triggerTextDownload(
+            exportStudentResultsCSV(state.students, state.minPoints),
+            "student-results.csv",
+            "text/csv;charset=utf-8;"
+        );
     });
 
     getById<HTMLButtonElement>("downloadCombinedCsvBtn").addEventListener("click", () => {

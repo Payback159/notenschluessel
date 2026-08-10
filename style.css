@@ -356,3 +356,17 @@ dialog[open] {
         transform: scale(1) translateY(0);
     }
 }
+
+.diagnostics {
+    margin: 0.5rem 0 0;
+    padding-left: 1.2rem;
+    list-style: disc;
+}
+
+.diagnostics:empty {
+    display: none;
+}
+
+.diagnostics li {
+    margin-top: 0.2rem;
+}
