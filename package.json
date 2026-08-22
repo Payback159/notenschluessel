@@ -16,10 +16,10 @@
         "lint": "eslint src tests"
     },
     "devDependencies": {
-        "eslint": "^9.39.5",
+        "eslint": "^10.8.1",
         "typescript": "^6.0.3",
-        "typescript-eslint": "^8.66.0",
-        "vite": "^8.1.5",
+        "typescript-eslint": "^8.67.0",
+        "vite": "^8.2.1",
         "vitest": "^4.1.10"
     },
     "dependencies": {
