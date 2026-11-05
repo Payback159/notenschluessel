@@ -64,4 +64,22 @@ describe("manual parser", () => {
         const result = parseManualEntries([{ name: "<Alice>", points: "10" }]);
         expect(result.students[0]?.name).toBe("Alice");
     });
+
+    it("warns about a missing name when sanitization leaves an empty string", () => {
+        const result = parseManualEntries([
+            { name: "<>", points: "50" },
+            { name: "Alice", points: "80" }
+        ]);
+        expect(result.students).toHaveLength(1);
+        expect(result.diagnostics.some((d) => d.code === "row-missing-name" && d.row === 1)).toBe(true);
+    });
+
+    it("rejects points with trailing non-numeric characters", () => {
+        const result = parseManualEntries([
+            { name: "Alice", points: "85abc" },
+            { name: "Bob", points: "70" }
+        ]);
+        expect(result.students).toHaveLength(1);
+        expect(result.diagnostics.some((d) => d.code === "row-unparsable-points" && d.row === 1)).toBe(true);
+    });
 });

@@ -43,11 +43,12 @@ da es sich fast immer um einen Tippfehler handelt.
 ## Unter der Haube
 
 Frontend: Vanilla TypeScript (Vite).
-Server: nginx:alpine liefert den fertigen Build aus.
+Hosting: Statisches Deployment über Cloudflare Pages (`dist/`).
 
 ```text
 notenschluessel/
-├── nginx.conf                 # nginx-Konfiguration (Security-Header, Healthcheck)
+├── public/
+│   └── _headers               # Cloudflare Pages Security- & Cache-Header
 ├── style.css                  # Zentrales CSS-Theme
 ├── index.html                 # App-Einstieg
 ├── src/                       # TypeScript App
@@ -57,19 +58,17 @@ notenschluessel/
 │   ├── parsers/               # CSV- und Manualparser
 │   ├── export/                # CSV- und Excel-Export
 │   └── ui/                    # Workflow-Orchestrierung
-├── tests/                     # Vitest Unit/Integrationstests
-├── dockerfile                 # node:24-alpine → nginx:alpine
-└── compose.yml
+└── tests/                     # Vitest Unit/Integrationstests
 ```
 
 Dependencies:
-- [xlsx-js-style](https://www.npmjs.com/package/xlsx-js-style) – Excel-Export mit Zellfarben direkt im Browser
+- [xlsx-js-style](https://www.npmjs.com/package/xlsx-js-style) – Excel-Export mit Zellfarben direkt im Browser (wird erst bei Bedarf dynamisch nachgeladen)
 
 ## Sicherheit
 
 - Keine serverseitige Verarbeitung von Schülerdaten
-- Security-Header via nginx (CSP, HSTS, X-Frame-Options, Permissions-Policy)
-- CSV-Injection-Schutz bei Exporten
+- Security-Header via `public/_headers` (CSP, HSTS, X-Frame-Options, Permissions-Policy)
+- CSV- und Excel-Injection-Schutz bei Exporten
 - Eingaben und Ergebnisse können in der App jederzeit zurückgesetzt werden
 
 ## Tests
@@ -77,16 +76,14 @@ Dependencies:
 ```bash
 npm run test           # Unit + Integrationstests (Vitest)
 npm run type-check     # TypeScript-Typen prüfen
+npm run build          # Produktions-Build nach dist/
 ```
 
-## Docker
+## Deployment (Cloudflare Pages)
 
-```bash
-docker compose up --build
-curl http://localhost:8080/healthz  # -> "OK"
-```
-
-Multi-Stage Build: node:24-alpine baut das Frontend, nginx:alpine liefert es aus.
+- **Build command:** `npm run build`
+- **Build output directory:** `dist`
+- **Node.js-Version:** `24` (aus `.nvmrc`)
 
 ## Lizenz
 

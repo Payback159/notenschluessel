@@ -211,7 +211,7 @@ button:active,
     transform: translateY(0);
 }
 
-#deleteDataBtn,
+#resetBtn,
 .remove-row {
     background: #fff;
     color: #234030;

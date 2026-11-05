@@ -45,6 +45,14 @@ export function pointsExceedMax(row: number, points: number, maxPoints: number):
     };
 }
 
+export function fileTooLarge(): Diagnostic {
+    return {
+        severity: "error",
+        code: "file-too-large",
+        message: "Die CSV-Datei überschreitet die maximale Größe von 10 MB."
+    };
+}
+
 export function noValidStudents(): Diagnostic {
     return {
         severity: "error",

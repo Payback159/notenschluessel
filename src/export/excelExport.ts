@@ -1,9 +1,13 @@
 import * as XLSX from "xlsx-js-style";
 import { GRADE_COLORS } from "../constants";
 import { GradeBound, Student } from "../types";
+import { guardFormulaPrefix } from "./csvExport";
 
-function getGradeStyle(grade: number) {
+function getGradeStyle(grade: number): XLSX.CellObject["s"] | undefined {
     const colors = GRADE_COLORS[grade as keyof typeof GRADE_COLORS];
+    if (!colors) {
+        return undefined;
+    }
     const textColorHex = colors.text.substring(1).toUpperCase(); // Remove #
     const bgColorHex = colors.bg.substring(1).toUpperCase(); // Remove #
 
@@ -21,6 +25,9 @@ function getGradeStyle(grade: number) {
 }
 
 function applyCellStyle(sheet: XLSX.WorkSheet, cellRef: string, style: XLSX.CellObject["s"]) {
+    if (!style) {
+        return;
+    }
     if (!sheet[cellRef]) {
         sheet[cellRef] = { t: "n", v: 0 };
     }
@@ -43,47 +50,45 @@ function styleGradeRow(sheet: XLSX.WorkSheet, rowIndex: number, grade: number): 
     }
 }
 
-export function buildGradeScaleWorkbook(bounds: GradeBound[]): XLSX.WorkBook {
-    const workbook = XLSX.utils.book_new();
+function createGradeScaleSheet(bounds: GradeBound[]): XLSX.WorkSheet {
     const data = bounds.map((b) => ({
         Note: b.grade,
         Untergrenze: b.lowerBound,
         Obergrenze: b.upperBound
     }));
     const sheet = XLSX.utils.json_to_sheet(data);
-
-    // Apply styles to header row
     styleHeaderRow(sheet);
-
-    // Apply grade colors
     bounds.forEach((bound, i) => {
         styleGradeRow(sheet, i + 2, bound.grade);
     });
-
-    XLSX.utils.book_append_sheet(workbook, sheet, "Notenskala");
-    return workbook;
+    return sheet;
 }
 
-export function buildStudentsWorkbook(students: Student[]): XLSX.WorkBook {
-    const workbook = XLSX.utils.book_new();
+function createStudentsSheet(students: Student[]): XLSX.WorkSheet {
     const data = students.map((s) => ({
-        Name: s.name,
+        Name: guardFormulaPrefix(s.name),
         Punkte: s.points,
         Note: s.grade ?? ""
     }));
     const sheet = XLSX.utils.json_to_sheet(data);
-
-    // Apply styles to header row
     styleHeaderRow(sheet);
-
-    // Apply grade colors to the whole row
     students.forEach((student, i) => {
         if (student.grade) {
             styleGradeRow(sheet, i + 2, student.grade);
         }
     });
+    return sheet;
+}
 
-    XLSX.utils.book_append_sheet(workbook, sheet, "Schüler");
+export function buildGradeScaleWorkbook(bounds: GradeBound[]): XLSX.WorkBook {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, createGradeScaleSheet(bounds), "Notenskala");
+    return workbook;
+}
+
+export function buildStudentsWorkbook(students: Student[]): XLSX.WorkBook {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, createStudentsSheet(students), "Schüler");
     return workbook;
 }
 
@@ -93,32 +98,8 @@ export function buildCombinedWorkbook(
     metadata: { maxPoints: number; minPoints: number; breakPointPercent: number }
 ): XLSX.WorkBook {
     const workbook = XLSX.utils.book_new();
-
-    // Grade scale sheet
-    const scaleData = bounds.map((b) => ({ Note: b.grade, Untergrenze: b.lowerBound, Obergrenze: b.upperBound }));
-    const scaleSheet = XLSX.utils.json_to_sheet(scaleData);
-
-    styleHeaderRow(scaleSheet);
-
-    bounds.forEach((bound, i) => {
-        styleGradeRow(scaleSheet, i + 2, bound.grade);
-    });
-    XLSX.utils.book_append_sheet(workbook, scaleSheet, "Notenskala");
-
-    // Students sheet
-    const studentData = students.map((s) => ({ Name: s.name, Punkte: s.points, Note: s.grade ?? "" }));
-    const studentSheet = XLSX.utils.json_to_sheet(studentData);
-
-    styleHeaderRow(studentSheet);
-
-    students.forEach((student, i) => {
-        if (student.grade) {
-            styleGradeRow(studentSheet, i + 2, student.grade);
-        }
-    });
-    XLSX.utils.book_append_sheet(workbook, studentSheet, "Schüler");
-
-    // Metadata sheet
+    XLSX.utils.book_append_sheet(workbook, createGradeScaleSheet(bounds), "Notenskala");
+    XLSX.utils.book_append_sheet(workbook, createStudentsSheet(students), "Schüler");
     XLSX.utils.book_append_sheet(
         workbook,
         XLSX.utils.aoa_to_sheet([

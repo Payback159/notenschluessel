@@ -93,4 +93,11 @@ describe("export modules", () => {
             expect(cell.s?.fill?.fgColor?.rgb).toBe("D4EDDA");
         }
     });
+
+    it("guards formula-prefixed student names in excel workbooks", () => {
+        const wb = buildStudentsWorkbook(students);
+        const sheet = wb.Sheets["Schüler"]!;
+        const cellA2 = sheet["A2"] as { v?: string };
+        expect(cellA2.v).toBe("'=cmd");
+    });
 });

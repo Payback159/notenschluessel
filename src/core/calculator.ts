@@ -13,6 +13,10 @@ import { Diagnostic, GradeBound } from "../types";
  * @param breakPointPercent - Percentage of the maximum score where the passing threshold (Grade 4) lies.
  * @returns An array of `GradeBound` objects defining the range for each grade.
  */
+function cleanFloat(value: number): number {
+    return Number(value.toPrecision(12));
+}
+
 export function calculateGradeBounds(
     maxPoints: number,
     minPoints: number,
@@ -27,10 +31,10 @@ export function calculateGradeBounds(
     let lowerBound1 = breakPointAbsolute + 3 * segment;
     const lowerBound5 = 0.0;
 
-    lowerBound1 = Math.round(lowerBound1 / minPoints) * minPoints;
-    lowerBound2 = Math.round(lowerBound2 / minPoints) * minPoints;
-    lowerBound3 = Math.round(lowerBound3 / minPoints) * minPoints;
-    lowerBound4 = Math.round(lowerBound4 / minPoints) * minPoints;
+    lowerBound1 = cleanFloat(Math.round(lowerBound1 / minPoints) * minPoints);
+    lowerBound2 = cleanFloat(Math.round(lowerBound2 / minPoints) * minPoints);
+    lowerBound3 = cleanFloat(Math.round(lowerBound3 / minPoints) * minPoints);
+    lowerBound4 = cleanFloat(Math.round(lowerBound4 / minPoints) * minPoints);
 
     lowerBound4 = Math.max(0, lowerBound4);
     lowerBound3 = Math.max(lowerBound4, lowerBound3);
@@ -39,10 +43,10 @@ export function calculateGradeBounds(
 
     return [
         { grade: 1, lowerBound: lowerBound1, upperBound: maxPoints },
-        { grade: 2, lowerBound: lowerBound2, upperBound: lowerBound1 - minPoints },
-        { grade: 3, lowerBound: lowerBound3, upperBound: lowerBound2 - minPoints },
-        { grade: 4, lowerBound: lowerBound4, upperBound: lowerBound3 - minPoints },
-        { grade: 5, lowerBound: lowerBound5, upperBound: lowerBound4 - minPoints }
+        { grade: 2, lowerBound: lowerBound2, upperBound: cleanFloat(lowerBound1 - minPoints) },
+        { grade: 3, lowerBound: lowerBound3, upperBound: cleanFloat(lowerBound2 - minPoints) },
+        { grade: 4, lowerBound: lowerBound4, upperBound: cleanFloat(lowerBound3 - minPoints) },
+        { grade: 5, lowerBound: lowerBound5, upperBound: cleanFloat(lowerBound4 - minPoints) }
     ];
 }
 

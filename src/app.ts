@@ -1,35 +1,25 @@
+import { LIMITS } from "./constants";
+import { fileTooLarge } from "./core/diagnostics";
+import { isValidRestoredState, PersistedState } from "./core/validation";
 import {
     exportCombinedCSV,
     exportGradeScaleCSV,
     exportStudentResultsCSV,
     triggerTextDownload
 } from "./export/csvExport";
-import {
-    buildCombinedWorkbook,
-    buildGradeScaleWorkbook,
-    buildStudentsWorkbook,
-    triggerWorkbookDownload
-} from "./export/excelExport";
-import { Diagnostic, ManualEntry } from "./types";
+import { Diagnostic, InputMode, ManualEntry } from "./types";
+import { formatPoints } from "./ui/format";
 import { renderAverage, renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
 import { runCalculationWorkflow } from "./ui/workflow";
 
-interface AppState {
-    maxPoints: number;
-    minPoints: number;
-    breakPointPercent: number;
-    gradeBounds: ReturnType<typeof runCalculationWorkflow>["gradeBounds"];
-    students: ReturnType<typeof runCalculationWorkflow>["students"];
-    averageGrade: number;
-}
-
-const state: AppState = {
+const state: PersistedState = {
     maxPoints: 100,
     minPoints: 0.5,
     breakPointPercent: 50,
     gradeBounds: [],
     students: [],
-    averageGrade: 0
+    averageGrade: 0,
+    inputMode: "csv"
 };
 
 function getById<T extends HTMLElement>(id: string): T {
@@ -157,16 +147,25 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     hideMessage();
 
-    const maxPoints = Number.parseInt(getById<HTMLInputElement>("maxPoints").value, 10);
+    const maxPoints = Number(getById<HTMLInputElement>("maxPoints").value);
     const minPoints = Number.parseFloat(getById<HTMLInputElement>("minPoints").value);
     const breakPointPercent = Number.parseFloat(getById<HTMLInputElement>("breakPointPercent").value);
     const modeInput = document.querySelector<HTMLInputElement>('input[name="inputMode"]:checked');
-    const inputMode = (modeInput?.value ?? "csv") as "csv" | "manual";
+    const inputMode = (modeInput?.value ?? "csv") as InputMode;
 
     let csvContent = "";
     if (inputMode === "csv") {
         const fileInput = getById<HTMLInputElement>("csvFile");
         const selectedFile = fileInput.files?.[0];
+        if (selectedFile && selectedFile.size > LIMITS.maxUploadSizeBytes) {
+            showMessage("error", "Die Berechnung wurde abgebrochen.", [fileTooLarge()]);
+            state.gradeBounds = [];
+            state.students = [];
+            state.averageGrade = 0;
+            sessionStorage.removeItem("notenschluessel:lastState");
+            renderResults();
+            return;
+        }
         csvContent = selectedFile ? await readFileAsText(selectedFile) : "";
     }
 
@@ -184,6 +183,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
         state.gradeBounds = [];
         state.students = [];
         state.averageGrade = 0;
+        sessionStorage.removeItem("notenschluessel:lastState");
         renderResults();
         return;
     }
@@ -194,6 +194,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     state.gradeBounds = result.gradeBounds;
     state.students = result.students;
     state.averageGrade = result.averageGrade;
+    state.inputMode = inputMode;
 
     sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
     renderResults();
@@ -258,15 +259,18 @@ function setupExports(): void {
         );
     });
 
-    getById<HTMLButtonElement>("downloadScaleXlsxBtn").addEventListener("click", () => {
+    getById<HTMLButtonElement>("downloadScaleXlsxBtn").addEventListener("click", async () => {
+        const { buildGradeScaleWorkbook, triggerWorkbookDownload } = await import("./export/excelExport");
         triggerWorkbookDownload(buildGradeScaleWorkbook(state.gradeBounds), "grade-scale.xlsx");
     });
 
-    getById<HTMLButtonElement>("downloadStudentsXlsxBtn").addEventListener("click", () => {
+    getById<HTMLButtonElement>("downloadStudentsXlsxBtn").addEventListener("click", async () => {
+        const { buildStudentsWorkbook, triggerWorkbookDownload } = await import("./export/excelExport");
         triggerWorkbookDownload(buildStudentsWorkbook(state.students), "student-results.xlsx");
     });
 
-    getById<HTMLButtonElement>("downloadCombinedXlsxBtn").addEventListener("click", () => {
+    getById<HTMLButtonElement>("downloadCombinedXlsxBtn").addEventListener("click", async () => {
+        const { buildCombinedWorkbook, triggerWorkbookDownload } = await import("./export/excelExport");
         triggerWorkbookDownload(
             buildCombinedWorkbook(state.gradeBounds, state.students, {
                 maxPoints: state.maxPoints,
@@ -306,17 +310,38 @@ function restoreState(): void {
     }
 
     try {
-        const restored = JSON.parse(raw) as AppState;
-        state.maxPoints = restored.maxPoints;
-        state.minPoints = restored.minPoints;
-        state.breakPointPercent = restored.breakPointPercent;
-        state.gradeBounds = restored.gradeBounds;
-        state.students = restored.students;
-        state.averageGrade = restored.averageGrade ?? 0;
+        const parsed: unknown = JSON.parse(raw);
+        if (!isValidRestoredState(parsed)) {
+            sessionStorage.removeItem("notenschluessel:lastState");
+            return;
+        }
 
-        getById<HTMLInputElement>("maxPoints").value = String(restored.maxPoints);
-        getById<HTMLInputElement>("minPoints").value = String(restored.minPoints);
-        getById<HTMLInputElement>("breakPointPercent").value = String(restored.breakPointPercent);
+        state.maxPoints = parsed.maxPoints;
+        state.minPoints = parsed.minPoints;
+        state.breakPointPercent = parsed.breakPointPercent;
+        state.gradeBounds = parsed.gradeBounds;
+        state.students = parsed.students;
+        state.averageGrade = parsed.averageGrade;
+        state.inputMode = parsed.inputMode ?? "csv";
+
+        getById<HTMLInputElement>("maxPoints").value = String(parsed.maxPoints);
+        getById<HTMLInputElement>("minPoints").value = String(parsed.minPoints);
+        getById<HTMLInputElement>("breakPointPercent").value = String(parsed.breakPointPercent);
+
+        if (state.inputMode === "manual" && parsed.students.length > 0) {
+            const manualRadio = document.querySelector<HTMLInputElement>('input[name="inputMode"][value="manual"]');
+            if (manualRadio) {
+                manualRadio.checked = true;
+            }
+            getById<HTMLDivElement>("csvSection").classList.add("hidden");
+            getById<HTMLDivElement>("manualSection").classList.remove("hidden");
+
+            const rows = getById<HTMLTableSectionElement>("manualRows");
+            rows.replaceChildren();
+            for (const student of parsed.students) {
+                addManualRow(student.name, formatPoints(student.points, parsed.minPoints));
+            }
+        }
 
         renderResults();
     } catch {

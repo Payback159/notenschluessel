@@ -25,6 +25,12 @@ describe("calculateGradeBounds", () => {
             expect(remainder === 0 || Math.abs(remainder - 0.25) < 1e-9).toBe(true);
         }
     });
+
+    it("eliminates IEEE-754 floating point noise for 0.1 step sizes", () => {
+        const bounds = calculateGradeBounds(50, 0.1, 50);
+        expect(bounds[0]?.lowerBound).toBe(43.8);
+        expect(bounds[3]?.upperBound).toBe(31.2);
+    });
 });
 
 describe("validateGradeBounds", () => {

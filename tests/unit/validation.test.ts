@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateCoreInputs, validateInputMode } from "../../src/core/validation";
+import { isValidRestoredState, validateCoreInputs, validateInputMode } from "../../src/core/validation";
 
 describe("core validation", () => {
     it("accepts valid core input values", () => {
@@ -51,5 +51,45 @@ describe("input mode validation", () => {
 
         const manual = validateInputMode("manual", true, false);
         expect(manual.some((x) => x.code === "input-mode-mismatch")).toBe(true);
+    });
+});
+
+describe("restored state validation", () => {
+    it("accepts a valid persisted state object", () => {
+        expect(
+            isValidRestoredState({
+                maxPoints: 100,
+                minPoints: 0.5,
+                breakPointPercent: 50,
+                gradeBounds: [],
+                students: [{ name: "Alice", points: 90, grade: 1 }],
+                averageGrade: 1
+            })
+        ).toBe(true);
+    });
+
+    it("rejects malformed or corrupted state payloads", () => {
+        expect(isValidRestoredState(null)).toBe(false);
+        expect(isValidRestoredState({ maxPoints: "100" })).toBe(false);
+        expect(
+            isValidRestoredState({
+                maxPoints: 100,
+                minPoints: 0.5,
+                breakPointPercent: 50,
+                gradeBounds: "not-an-array",
+                students: [],
+                averageGrade: 0
+            })
+        ).toBe(false);
+        expect(
+            isValidRestoredState({
+                maxPoints: 100,
+                minPoints: 0.5,
+                breakPointPercent: 50,
+                gradeBounds: [],
+                students: [{ name: "Alice", points: 90, grade: 99 }],
+                averageGrade: 0
+            })
+        ).toBe(false);
     });
 });

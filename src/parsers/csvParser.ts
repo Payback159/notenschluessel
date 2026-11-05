@@ -1,8 +1,10 @@
 import { LIMITS } from "../constants";
 import {
+    fileTooLarge,
     noValidStudents,
     rowLimitReached,
     rowMissingName,
+    rowMissingPoints,
     rowNegativePoints,
     rowTooFewColumns,
     rowUnparsablePoints
@@ -40,43 +42,25 @@ function parseCSVLine(line: string, delimiter: string): string[] {
 
 const DELIMITER_CANDIDATES = [",", ";"] as const;
 const DELIMITER_SAMPLE_LINES = 5;
+const POINTS_PATTERN = /^[+-]?\d+(?:[.,]\d+)?$/;
 
 /**
- * Reads a points field the way the import loop does: German decimal comma first,
- * then float. Shared with `detectDelimiter` so a delimiter is judged by the very
- * rule that later decides whether a row is usable.
+ * Reads a points field strictly: German decimal comma or dot, no trailing
+ * garbage or multiple decimal separators. Shared with `detectDelimiter` and
+ * `manualParser` so all inputs are judged by the same rule.
  */
-function parsePointsField(raw: string): number {
-    return Number.parseFloat(raw.trim().replaceAll(",", "."));
+export function parsePointsField(raw: string): number {
+    const trimmed = raw.trim();
+    if (!POINTS_PATTERN.test(trimmed)) {
+        return Number.NaN;
+    }
+    return Number.parseFloat(trimmed.replace(",", "."));
 }
 
-/**
- * Picks the delimiter structurally instead of by counting raw characters.
- *
- * Counting `,` and `;` across the first kilobyte breaks on the app's own export:
- * a semicolon-delimited row with a decimal comma and a name containing commas
- * (e.g. "Nachname, Vorname, Jr.") contributes as many commas as semicolons, and a
- * few such rows tip the raw count towards comma even though the file is
- * semicolon-delimited. Splitting each candidate with the real quote-aware parser
- * and requiring a consistent field count of at least two per line is immune to
- * that, because a wrong delimiter almost never produces the same field count on
- * every sampled line.
- *
- * Field count alone is still not enough. Without a header row, splitting
- * "Nachname, Vorname, Jr.;76,5;2" on the comma yields a consistent four fields
- * while the correct semicolon yields three, so "more fields wins" would pick the
- * comma and lose every row. The number of rows whose second field actually reads
- * as a points value therefore decides first.
- *
- * That still leaves a tie for a header-less semicolon file whose points all carry
- * a decimal comma: "Müller;76,5" splits into a usable ["Müller;76", "5"] under the
- * comma too. So a name field that swallowed the rival delimiter counts against a
- * candidate — it is the tell-tale of a wrong split. Field count only breaks what
- * is left.
- */
 interface DelimiterScore {
     usableRows: number;
     cleanNames: number;
+    multiColRows: number;
     fields: number;
 }
 
@@ -86,6 +70,9 @@ function outranks(candidate: DelimiterScore, incumbent: DelimiterScore): boolean
     }
     if (candidate.cleanNames !== incumbent.cleanNames) {
         return candidate.cleanNames > incumbent.cleanNames;
+    }
+    if (candidate.multiColRows !== incumbent.multiColRows) {
+        return candidate.multiColRows > incumbent.multiColRows;
     }
     return candidate.fields > incumbent.fields;
 }
@@ -100,26 +87,23 @@ export function detectDelimiter(content: string): "," | ";" {
 
     for (const delimiter of DELIMITER_CANDIDATES) {
         const records = sampleLines.map((line) => parseCSVLine(line, delimiter));
-        const first = records[0]?.length;
-        if (first === undefined || first < 2) {
-            continue;
-        }
-
-        const consistent = records.every((record) => record.length === first);
-        if (!consistent) {
+        const multiColRecords = records.filter((record) => record.length >= 2);
+        const first = multiColRecords[0]?.length;
+        if (first === undefined) {
             continue;
         }
 
         const rivals = DELIMITER_CANDIDATES.filter((candidate) => candidate !== delimiter);
         const score: DelimiterScore = {
-            usableRows: records.filter((record) => {
+            usableRows: multiColRecords.filter((record) => {
                 const rawPoints = record[1];
                 return rawPoints !== undefined && Number.isFinite(parsePointsField(rawPoints));
             }).length,
-            cleanNames: records.filter((record) => {
+            cleanNames: multiColRecords.filter((record) => {
                 const name = record[0];
                 return name !== undefined && !rivals.some((rival) => name.includes(rival));
             }).length,
+            multiColRows: multiColRecords.length,
             fields: first
         };
 
@@ -132,6 +116,10 @@ export function detectDelimiter(content: string): "," | ";" {
 }
 
 export function parseCSVContent(rawContent: string): CSVParseResult {
+    if (rawContent.length > LIMITS.maxUploadSizeBytes) {
+        return { students: [], diagnostics: [fileTooLarge()] };
+    }
+
     // A file exported by this app starts with a BOM so Excel reads it as UTF-8.
     const content = rawContent.startsWith("\uFEFF") ? rawContent.slice(1) : rawContent;
 
@@ -167,15 +155,21 @@ export function parseCSVContent(rawContent: string): CSVParseResult {
             continue;
         }
 
-        const name = col0.trim();
         const rawPoints = col1.trim();
 
-        if (name === "" && rawPoints === "") {
+        if (col0.trim() === "" && rawPoints === "") {
             continue;
         }
 
+        const name = sanitizeName(col0);
+
         if (name === "") {
             diagnostics.push(rowMissingName(row));
+            continue;
+        }
+
+        if (rawPoints === "") {
+            diagnostics.push(rowMissingPoints(row));
             continue;
         }
 
@@ -196,7 +190,7 @@ export function parseCSVContent(rawContent: string): CSVParseResult {
             break;
         }
 
-        students.push({ name: sanitizeName(name), points, sourceRow: row });
+        students.push({ name, points, sourceRow: row });
     }
 
     if (limitReached) {

@@ -8,6 +8,7 @@ import {
 } from "../core/diagnostics";
 import { sanitizeName } from "../core/sanitize";
 import { Diagnostic, ManualEntry, ManualParseResult, Student } from "../types";
+import { parsePointsField } from "./csvParser";
 
 export function hasNonEmptyManualEntries(entries: ManualEntry[]): boolean {
     return entries.some((entry) => entry.name.trim() !== "" || entry.points.trim() !== "");
@@ -25,12 +26,13 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
         }
 
         const row = i + 1;
-        const name = entry.name.trim();
         const pointsRaw = entry.points.trim();
 
-        if (name === "" && pointsRaw === "") {
+        if (entry.name.trim() === "" && pointsRaw === "") {
             continue;
         }
+
+        const name = sanitizeName(entry.name);
 
         if (name === "") {
             diagnostics.push(rowMissingName(row));
@@ -42,7 +44,7 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
             continue;
         }
 
-        const points = Number.parseFloat(pointsRaw.replaceAll(",", "."));
+        const points = parsePointsField(pointsRaw);
 
         if (!Number.isFinite(points)) {
             diagnostics.push(rowUnparsablePoints(row, pointsRaw));
@@ -59,7 +61,7 @@ export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
             break;
         }
 
-        students.push({ name: sanitizeName(name), points, sourceRow: row });
+        students.push({ name, points, sourceRow: row });
     }
 
     if (limitReached) {

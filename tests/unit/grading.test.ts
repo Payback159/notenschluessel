@@ -50,4 +50,10 @@ describe("grading", () => {
     it("returns 0 average for empty list", () => {
         expect(calculateAverageGrade([])).toBe(0);
     });
+
+    it("awards grade 1 when student score equals a 0.1-step lower bound", () => {
+        const scale = calculateGradeBounds(50, 0.1, 50);
+        const graded = processStudents([{ name: "Exact", points: 43.8 }], scale);
+        expect(graded[0]?.grade).toBe(1);
+    });
 });

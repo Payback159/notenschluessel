@@ -7,7 +7,7 @@
 ### Architecture
 
 - **Frontend**: Vanilla TypeScript, gebaut mit Vite, keine Frameworks
-- **Server**: `nginx:alpine` liefert statische Assets aus `dist/`
+- **Hosting**: Cloudflare Pages liefert statische Assets aus `dist/` (inkl. `public/_headers`)
 - **Keine serverseitige Verarbeitung von Schülerdaten**
 - **Data flow**: DOM-Formular → TS-Core-Logik → sessionStorage → Client-Export
 
@@ -19,10 +19,9 @@
 - **xlsx-js-style** für Excel-Export direkt im Browser (Fork von SheetJS mit Zell-Styling – das normale `xlsx`-Community-Paket schreibt keine Styles)
 - Kein CSS-Framework – zentrales Stylesheet in `style.css`
 
-### Server
-- **nginx:alpine** – liefert `dist/`, setzt Security-Header, stellt `/healthz` bereit
-- Konfiguration in `nginx.conf`
-- Kein Backend-Code, keine Routen für Nutzdaten
+### Hosting
+- **Cloudflare Pages** – liefert `dist/` direkt vom Edge aus, setzt Security- und Cache-Header über `public/_headers`
+- Kein Backend-Code, kein Origin-Server, keine Routen für Nutzdaten
 
 ## Critical Patterns & Conventions
 
@@ -53,18 +52,17 @@ const raw = sessionStorage.getItem("notenschluessel:lastState");
 sessionStorage.removeItem("notenschluessel:lastState");
 ```
 
-### Security-Header (nginx.conf)
+### Security-Header (public/_headers)
 
-Alle Header via `add_header` in `nginx.conf`:
+Alle Header via `public/_headers` (wird beim Build nach `dist/_headers` kopiert):
 
 - `X-Frame-Options: DENY`
 - `X-Content-Type-Options: nosniff`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'`
+- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-
-Wichtig: In nested `location`-Blöcken müssen `add_header`-Direktiven wiederholt werden (nginx erbt sie nicht).
+- `/assets/*` erhält zusätzlich `Cache-Control: public, max-age=31536000, immutable`
 
 ### Input-Modus (CSV vs. Manuell)
 
@@ -122,7 +120,8 @@ function sanitizeCSVField(field: string): string { ... }
 
 ```
 notenschluessel/
-├── nginx.conf                     # nginx Server-Konfiguration
+├── public/
+│   └── _headers                   # Cloudflare Pages Security- & Cache-Header
 ├── style.css                      # Zentrales CSS-Theme
 ├── index.html                     # Vite App-Einstieg
 ├── src/
@@ -147,11 +146,9 @@ notenschluessel/
 │       ├── format.ts              # Zahlenformatierung (Dezimalkomma, Nachkommastellen aus minPoints)
 │       ├── render.ts              # DOM-Rendering der Ergebnistabelle, ausschließlich via textContent
 │       └── workflow.ts            # Orchestrierung: Validierung → Parsing → Berechnung
-├── tests/
-│   ├── unit/                      # calculator, grading, validation, csvParser, manualParser, export
-│   └── integration/               # fullWorkflow, inputModes
-├── dockerfile                     # Multi-Stage: node:24-alpine Build → nginx:alpine Runtime
-└── compose.yml                    # Docker Compose für lokale Entwicklung
+└── tests/
+    ├── unit/                      # calculator, grading, validation, csvParser, manualParser, export
+    └── integration/               # fullWorkflow, inputModes
 ```
 
 ## Development Workflows
@@ -167,8 +164,7 @@ npm run dev       # Vite Dev-Server auf http://localhost:5173
 
 ```bash
 npm run build
-docker compose up --build
-curl http://localhost:8080/healthz  # → "OK"
+npm run preview   # Lokale Vorschau des dist/-Builds
 ```
 
 ### Tests
@@ -202,7 +198,7 @@ Mit `breakAbs = maxPoints * breakPointPercent/100` und `segment = (maxPoints - b
 4. ❌ Excel-Styles mit `xlsx` (Community) statt `xlsx-js-style` schreiben – Styles werden dann verworfen; Farben als 6-stelliges RGB (`D4EDDA`), nicht ARGB
 5. ❌ CSV und Manuell gleichzeitig übergeben – gegenseitig ausschließend
 6. ❌ Beim Mode-Umschalten alte Eingabedaten nicht leeren – führt zu falschem Validierungsfehler
-7. ❌ Security-Header nur im Server-Block definieren – in nginx nested `location`-Blöcken müssen `add_header` wiederholt werden
+7. ❌ Security-Header vergessen – immer in `public/_headers` pflegen
 8. ❌ Zahlen mit `toFixed()` formatieren – immer `formatPoints()` aus `src/ui/format.ts`, sonst weicht die Anzeige bei Schrittweite 0,25 von der Berechnung ab
 9. ❌ Diagnose-Texte an der Fundstelle zusammenbauen – Factories in `src/core/diagnostics.ts` verwenden
 10. ❌ Werte per `innerHTML` in Tabellen schreiben – `src/ui/render.ts` setzt ausschließlich `textContent`
@@ -219,4 +215,4 @@ Mit `breakAbs = maxPoints * breakPointPercent/100` und `segment = (maxPoints - b
 - **Excel-Export**: `src/export/excelExport.ts`
 - **DOM-Controller**: `src/app.ts`
 - **CSS-Theme**: `style.css`
-- **nginx-Konfiguration**: `nginx.conf`
+- **Cloudflare Pages Header**: `public/_headers`

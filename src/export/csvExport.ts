@@ -4,6 +4,14 @@ import { GradeBound, Student } from "../types";
 const DELIMITER = ";";
 const FORMULA_PREFIXES = "=+-@\t\r";
 
+export function guardFormulaPrefix(field: string): string {
+    if (!field) {
+        return "";
+    }
+    const firstChar = field[0] ?? "";
+    return FORMULA_PREFIXES.includes(firstChar) ? `'${field}` : field;
+}
+
 /**
  * Guards a field against spreadsheet formula injection **and** against breaking
  * the column layout. Both steps run: prefixing alone left a value containing the
@@ -14,8 +22,7 @@ function sanitizeCSVField(field: string): string {
         return "";
     }
 
-    const firstChar = field[0] ?? "";
-    const guarded = FORMULA_PREFIXES.includes(firstChar) ? `'${field}` : field;
+    const guarded = guardFormulaPrefix(field);
 
     if (
         guarded.includes(DELIMITER) ||

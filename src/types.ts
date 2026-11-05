@@ -5,6 +5,7 @@ export type DiagnosticCode =
     | "degenerate-scale"
     | "input-mode-conflict"
     | "input-mode-mismatch"
+    | "file-too-large"
     | "points-exceed-max"
     | "no-valid-students"
     | "row-too-few-columns"

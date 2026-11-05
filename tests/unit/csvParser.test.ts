@@ -123,4 +123,43 @@ describe("csv parser", () => {
         expect(result.students).toHaveLength(1);
         expect(result.students[0]?.name).toBe("Alice");
     });
+
+    it("detects semicolon delimiter even when one of the first 5 rows is malformed", () => {
+        const result = parseCSVContent("Name;Punkte\nAlice;95\nKaputt\nBob;abc\nCharlie;20");
+        expect(result.students).toHaveLength(2);
+        expect(result.diagnostics.map((d) => d.code)).toEqual([
+            "row-too-few-columns",
+            "row-unparsable-points"
+        ]);
+    });
+
+    it("rejects points with trailing non-numeric characters or multiple decimals", () => {
+        const result = parseCSVContent("Name,Punkte\nAlice,85abc\nBob,12.05.2026\nCharlie,50");
+        expect(result.students).toHaveLength(1);
+        expect(result.students[0]?.name).toBe("Charlie");
+        expect(result.diagnostics.map((d) => d.code)).toEqual([
+            "row-unparsable-points",
+            "row-unparsable-points"
+        ]);
+    });
+
+    it("warns about a missing name when the name consists only of stripped characters", () => {
+        const result = parseCSVContent("Name,Punkte\n<>,50\nAlice,80");
+        expect(result.students).toHaveLength(1);
+        expect(result.students[0]?.name).toBe("Alice");
+        expect(result.diagnostics.some((d) => d.code === "row-missing-name" && d.row === 2)).toBe(true);
+    });
+
+    it("emits row-missing-points when the points column is empty", () => {
+        const result = parseCSVContent("Name;Punkte\nAlice;\nBob;80");
+        expect(result.students).toHaveLength(1);
+        expect(result.diagnostics.some((d) => d.code === "row-missing-points" && d.row === 2)).toBe(true);
+    });
+
+    it("rejects input exceeding maxUploadSizeBytes", () => {
+        const oversized = "a".repeat(LIMITS.maxUploadSizeBytes + 1);
+        const result = parseCSVContent(oversized);
+        expect(result.students).toHaveLength(0);
+        expect(result.diagnostics.some((d) => d.code === "file-too-large" && d.severity === "error")).toBe(true);
+    });
 });
