@@ -1,6 +1,10 @@
 import { degenerateScale } from "./diagnostics";
 import { Diagnostic, GradeBound } from "../types";
 
+function cleanFloat(value: number): number {
+    return Number(value.toPrecision(12));
+}
+
 /**
  * Calculates grade boundaries based on the Austrian 1–5 scale.
  * 
@@ -13,10 +17,6 @@ import { Diagnostic, GradeBound } from "../types";
  * @param breakPointPercent - Percentage of the maximum score where the passing threshold (Grade 4) lies.
  * @returns An array of `GradeBound` objects defining the range for each grade.
  */
-function cleanFloat(value: number): number {
-    return Number(value.toPrecision(12));
-}
-
 export function calculateGradeBounds(
     maxPoints: number,
     minPoints: number,
@@ -24,22 +24,13 @@ export function calculateGradeBounds(
 ): GradeBound[] {
     const breakPointAbsolute = maxPoints * (breakPointPercent / 100.0);
     const segment = (maxPoints - breakPointAbsolute) / 4.0;
+    const round = (value: number) => cleanFloat(Math.round(value / minPoints) * minPoints);
 
-    let lowerBound4 = breakPointAbsolute;
-    let lowerBound3 = breakPointAbsolute + segment;
-    let lowerBound2 = breakPointAbsolute + 2 * segment;
-    let lowerBound1 = breakPointAbsolute + 3 * segment;
     const lowerBound5 = 0.0;
-
-    lowerBound1 = cleanFloat(Math.round(lowerBound1 / minPoints) * minPoints);
-    lowerBound2 = cleanFloat(Math.round(lowerBound2 / minPoints) * minPoints);
-    lowerBound3 = cleanFloat(Math.round(lowerBound3 / minPoints) * minPoints);
-    lowerBound4 = cleanFloat(Math.round(lowerBound4 / minPoints) * minPoints);
-
-    lowerBound4 = Math.max(0, lowerBound4);
-    lowerBound3 = Math.max(lowerBound4, lowerBound3);
-    lowerBound2 = Math.max(lowerBound3, lowerBound2);
-    lowerBound1 = Math.max(lowerBound2, lowerBound1);
+    const lowerBound4 = Math.max(0, round(breakPointAbsolute));
+    const lowerBound3 = Math.max(lowerBound4, round(breakPointAbsolute + segment));
+    const lowerBound2 = Math.max(lowerBound3, round(breakPointAbsolute + 2 * segment));
+    const lowerBound1 = Math.max(lowerBound2, round(breakPointAbsolute + 3 * segment));
 
     return [
         { grade: 1, lowerBound: lowerBound1, upperBound: maxPoints },

@@ -44,12 +44,7 @@ export interface ManualEntry {
     points: string;
 }
 
-export interface CSVParseResult {
-    students: Student[];
-    diagnostics: Diagnostic[];
-}
-
-export interface ManualParseResult {
+export interface ParseResult {
     students: Student[];
     diagnostics: Diagnostic[];
 }

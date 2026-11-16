@@ -93,16 +93,16 @@ export function withBom(content: string): string {
     return `\uFEFF${content}`;
 }
 
-/**
- * It sits in `withBom` rather than in the export functions above so their
- * return values stay plain strings that tests can assert on directly.
- */
-export function triggerTextDownload(content: string, filename: string, mimeType: string): void {
-    const blob = new Blob([withBom(content)], { type: mimeType });
+export function downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;
     link.click();
     URL.revokeObjectURL(url);
+}
+
+/** The BOM is added here rather than in the export functions so tests can assert on plain strings. */
+export function triggerTextDownload(content: string, filename: string, mimeType: string): void {
+    downloadBlob(new Blob([withBom(content)], { type: mimeType }), filename);
 }

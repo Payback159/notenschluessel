@@ -7,14 +7,14 @@ import {
     rowUnparsablePoints
 } from "../core/diagnostics";
 import { sanitizeName } from "../core/sanitize";
-import { Diagnostic, ManualEntry, ManualParseResult, Student } from "../types";
+import { Diagnostic, ManualEntry, ParseResult, Student } from "../types";
 import { parsePointsField } from "./csvParser";
 
 export function hasNonEmptyManualEntries(entries: ManualEntry[]): boolean {
     return entries.some((entry) => entry.name.trim() !== "" || entry.points.trim() !== "");
 }
 
-export function parseManualEntries(entries: ManualEntry[]): ManualParseResult {
+export function parseManualEntries(entries: ManualEntry[]): ParseResult {
     const students: Student[] = [];
     const diagnostics: Diagnostic[] = [];
     let limitReached = false;
