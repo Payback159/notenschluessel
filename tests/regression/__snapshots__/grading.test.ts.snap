@@ -1,0 +1,71 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Regression: Notenberechnung > alle Notenschlüssel im Raster sind unverändert (Prüfsumme) 1`] = `
+{
+  "count": 917286,
+  "sha256": "e2b16401c1cd2a3bc5be3afffd71c69298f2de8aabad92888834aba37fa8319f",
+}
+`;
+
+exports[`Regression: Notenberechnung > der Gesamtablauf liefert für zufällige Eingaben unveränderte Ergebnisse (Prüfsumme) 1`] = `"589d7b96892841d6f816ea59fce5d3df40c36a501d66d267f0731dee15acf8bc"`;
+
+exports[`Regression: Notenberechnung > typische Notenschlüssel sind unverändert (lesbarer Snapshot) 1`] = `
+{
+  "max=100 step=0.5 bp=50": [
+    "1: 87.5 – 100",
+    "2: 75 – 87",
+    "3: 62.5 – 74.5",
+    "4: 50 – 62",
+    "5: 0 – 49.5",
+  ],
+  "max=100 step=1 bp=50": [
+    "1: 88 – 100",
+    "2: 75 – 87",
+    "3: 63 – 74",
+    "4: 50 – 62",
+    "5: 0 – 49",
+  ],
+  "max=120 step=0.5 bp=45": [
+    "1: 103.5 – 120",
+    "2: 87 – 103",
+    "3: 70.5 – 86.5",
+    "4: 54 – 70",
+    "5: 0 – 53.5",
+  ],
+  "max=24 step=1 bp=50": [
+    "1: 21 – 24",
+    "2: 18 – 20",
+    "3: 15 – 17",
+    "4: 12 – 14",
+    "5: 0 – 11",
+  ],
+  "max=40 step=0.25 bp=55": [
+    "1: 35.5 – 40",
+    "2: 31 – 35.25",
+    "3: 26.5 – 30.75",
+    "4: 22 – 26.25",
+    "5: 0 – 21.75",
+  ],
+  "max=48 step=0.5 bp=60": [
+    "1: 43 – 48",
+    "2: 38.5 – 42.5",
+    "3: 33.5 – 38",
+    "4: 29 – 33",
+    "5: 0 – 28.5",
+  ],
+  "max=50 step=0.1 bp=50": [
+    "1: 43.8 – 50",
+    "2: 37.5 – 43.7",
+    "3: 31.3 – 37.4",
+    "4: 25 – 31.2",
+    "5: 0 – 24.9",
+  ],
+  "max=60 step=0.5 bp=50": [
+    "1: 52.5 – 60",
+    "2: 45 – 52",
+    "3: 37.5 – 44.5",
+    "4: 30 – 37",
+    "5: 0 – 29.5",
+  ],
+}
+`;

@@ -42,6 +42,8 @@ validateCoreInputs → calculateGradeBounds → validateGradeBounds → validate
 - CSV-Export: Semikolon, Dezimalkomma, UTF-8-BOM. Der Injection-Schutz in `sanitizeCSVField()` maskiert zuerst mit `'` und quotet danach. Beide Schritte laufen nacheinander.
 - Security-Header (CSP ohne `unsafe-inline`, HSTS usw.) stehen in `public/_headers`. Inline-Skripte und -Styles brechen deshalb in Produktion.
 
+- Regressionsschutz für die Noten: `tests/regression/` prüft ein Raster von rund 900.000 Notenschlüsseln gegen fachliche Regeln und gegen Snapshots. Ein fehlschlagender Snapshot bedeutet, dass sich Noten geändert haben. Snapshots nur nach bewusster, fachlich geprüfter Änderung mit `npx vitest run -u` aktualisieren.
+
 ## Deployment
 
 Cloudflare (statische Assets aus `dist/`, `wrangler.jsonc`). `npm run build` schreibt bei gesetzter Umgebungsvariable `CUSTOM_DOMAIN` eine Custom-Domain-Route in `wrangler.jsonc`. Diese Änderung nach lokalen Builds nicht versehentlich committen.
