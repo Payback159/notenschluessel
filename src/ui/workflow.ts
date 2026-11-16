@@ -80,8 +80,8 @@ export function runCalculationWorkflow(input: WorkflowInput): WorkflowResult {
         return failed(diagnostics);
     }
 
-    const gradedStudents = students.length > 0 ? processStudents(students, gradeBounds) : [];
-    const averageGrade = gradedStudents.length > 0 ? calculateAverageGrade(gradedStudents) : 0;
+    const gradedStudents = processStudents(students, gradeBounds);
+    const averageGrade = calculateAverageGrade(gradedStudents);
 
     return {
         ok: true,

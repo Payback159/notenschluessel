@@ -12,6 +12,8 @@ import { formatPoints } from "./ui/format";
 import { renderAverage, renderDiagnostics, renderGradeScale, renderStudents, summaryLine } from "./ui/render";
 import { runCalculationWorkflow } from "./ui/workflow";
 
+const STORAGE_KEY = "notenschluessel:lastState";
+
 const state: PersistedState = {
     maxPoints: 100,
     minPoints: 0.5,
@@ -126,12 +128,15 @@ function renderResults(): void {
     getById<HTMLDivElement>("studentsCard").classList.toggle("hidden", state.students.length === 0);
 }
 
-function resetInputs(): void {
+function clearResults(): void {
     state.gradeBounds = [];
     state.students = [];
     state.averageGrade = 0;
-    sessionStorage.removeItem("notenschluessel:lastState");
+    sessionStorage.removeItem(STORAGE_KEY);
+    renderResults();
+}
 
+function resetInputs(): void {
     // Auch die eingegebenen Schülerdaten aus den Formularfeldern entfernen,
     // nicht nur den gespeicherten Zustand.
     getById<HTMLInputElement>("csvFile").value = "";
@@ -139,7 +144,7 @@ function resetInputs(): void {
     rows.innerHTML = "";
     addManualRow();
 
-    renderResults();
+    clearResults();
     showMessage("success", "Eingaben und Ergebnisse wurden zurückgesetzt.");
 }
 
@@ -159,11 +164,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
         const selectedFile = fileInput.files?.[0];
         if (selectedFile && selectedFile.size > LIMITS.maxUploadSizeBytes) {
             showMessage("error", "Die Berechnung wurde abgebrochen.", [fileTooLarge()]);
-            state.gradeBounds = [];
-            state.students = [];
-            state.averageGrade = 0;
-            sessionStorage.removeItem("notenschluessel:lastState");
-            renderResults();
+            clearResults();
             return;
         }
         csvContent = selectedFile ? await readFileAsText(selectedFile) : "";
@@ -180,11 +181,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
 
     if (!result.ok) {
         showMessage("error", "Die Berechnung wurde abgebrochen.", result.diagnostics);
-        state.gradeBounds = [];
-        state.students = [];
-        state.averageGrade = 0;
-        sessionStorage.removeItem("notenschluessel:lastState");
-        renderResults();
+        clearResults();
         return;
     }
 
@@ -196,7 +193,7 @@ async function handleSubmit(event: SubmitEvent): Promise<void> {
     state.averageGrade = result.averageGrade;
     state.inputMode = inputMode;
 
-    sessionStorage.setItem("notenschluessel:lastState", JSON.stringify(state));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     renderResults();
     showMessage(
         "success",
@@ -304,7 +301,7 @@ function setupPrivacyModal(): void {
 }
 
 function restoreState(): void {
-    const raw = sessionStorage.getItem("notenschluessel:lastState");
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) {
         return;
     }
@@ -312,7 +309,7 @@ function restoreState(): void {
     try {
         const parsed: unknown = JSON.parse(raw);
         if (!isValidRestoredState(parsed)) {
-            sessionStorage.removeItem("notenschluessel:lastState");
+            sessionStorage.removeItem(STORAGE_KEY);
             return;
         }
 
@@ -345,7 +342,7 @@ function restoreState(): void {
 
         renderResults();
     } catch {
-        sessionStorage.removeItem("notenschluessel:lastState");
+        sessionStorage.removeItem(STORAGE_KEY);
     }
 }
 

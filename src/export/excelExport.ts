@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx-js-style";
 import { GRADE_COLORS } from "../constants";
 import { GradeBound, Student } from "../types";
-import { guardFormulaPrefix } from "./csvExport";
+import { downloadBlob, guardFormulaPrefix } from "./csvExport";
 
 function getGradeStyle(grade: number): XLSX.CellObject["s"] | undefined {
     const colors = GRADE_COLORS[grade as keyof typeof GRADE_COLORS];
@@ -113,20 +113,14 @@ export function buildCombinedWorkbook(
     return workbook;
 }
 
-export function workbookToUint8Array(workbook: XLSX.WorkBook): Uint8Array {
+export function workbookToUint8Array(workbook: XLSX.WorkBook): Uint8Array<ArrayBuffer> {
     const arrayBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
     return new Uint8Array(arrayBuffer);
 }
 
 export function triggerWorkbookDownload(workbook: XLSX.WorkBook, filename: string): void {
-    const arrayBuffer = XLSX.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
-    const blob = new Blob([arrayBuffer], {
+    const blob = new Blob([workbookToUint8Array(workbook)], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, filename);
 }

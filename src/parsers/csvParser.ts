@@ -10,7 +10,7 @@ import {
     rowUnparsablePoints
 } from "../core/diagnostics";
 import { sanitizeName } from "../core/sanitize";
-import { CSVParseResult, Diagnostic, Student } from "../types";
+import { ParseResult, Diagnostic, Student } from "../types";
 
 function parseCSVLine(line: string, delimiter: string): string[] {
     const fields: string[] = [];
@@ -115,7 +115,7 @@ export function detectDelimiter(content: string): "," | ";" {
     return best?.delimiter ?? ",";
 }
 
-export function parseCSVContent(rawContent: string): CSVParseResult {
+export function parseCSVContent(rawContent: string): ParseResult {
     if (rawContent.length > LIMITS.maxUploadSizeBytes) {
         return { students: [], diagnostics: [fileTooLarge()] };
     }

@@ -32,16 +32,17 @@ validateCoreInputs → calculateGradeBounds → validateGradeBounds → validate
 - **CSV- und Manuell-Modus schließen sich aus.** Daten im jeweils anderen Modus ergeben `input-mode-mismatch`. Beim Moduswechsel leert `app.ts` die Daten des anderen Modus.
 - **Algorithmus** (`src/core/calculator.ts`): Der Knickpunkt ist die Untergrenze von Note 4. Der Bereich darüber wird in 4 gleiche Segmente geteilt, und alle Grenzen werden auf Vielfache von `minPoints` (Schrittweite) gerundet. `cleanFloat` beseitigt Float-Artefakte.
 - **Eingabegrenzen** (`src/core/validation.ts`): `maxPoints` ist eine positive Ganzzahl ≤ 1000, `minPoints` ist positiv und ≤ `maxPoints`, `breakPointPercent` liegt zwischen 1 und 99. Punktzahlen über `maxPoints` ergeben `points-exceed-max` (Abbruch, prüft `src/core/studentValidation.ts`). Limits stehen in `LIMITS` in `src/constants.ts`.
-- `src/index.ts` ist ein Barrel-Export der öffentlichen API (ohne `app.ts`).
 
 ## Fallstricke
 
 - Zahlen nie mit `toFixed()` formatieren, sondern immer `formatPoints()` aus `src/ui/format.ts` verwenden (Dezimalkomma, Nachkommastellen aus `minPoints`).
 - Kein `innerHTML` mit Daten. `render.ts` und `app.ts` arbeiten ausschließlich mit `textContent`/`createElement`/`.value`.
 - Notenfarben kommen nur aus `GRADE_COLORS` in `src/constants.ts`. Die CSS-Klassen `.grade-1`…`.grade-5` in `style.css` und `getGradeStyle()` im Excel-Export müssen dazu passen.
-- Excel-Export: Paket `xlsx-js-style` (nicht `xlsx`). Es wird dynamisch nachgeladen und von `vite.config.ts` in einen eigenen Chunk gelegt. Farben als 6-stelliges RGB ohne `#`/ARGB, `patternType: "solid"` ist Pflicht (wegen LibreOffice), und die ganze Zeile A–C wird eingefärbt.
+- Excel-Export: Paket `xlsx-js-style` (nicht `xlsx`). Es wird per `import()` dynamisch nachgeladen, Vite legt es dadurch automatisch in einen eigenen Chunk. Farben als 6-stelliges RGB ohne `#`/ARGB, `patternType: "solid"` ist Pflicht (wegen LibreOffice), und die ganze Zeile A–C wird eingefärbt.
 - CSV-Export: Semikolon, Dezimalkomma, UTF-8-BOM. Der Injection-Schutz in `sanitizeCSVField()` maskiert zuerst mit `'` und quotet danach. Beide Schritte laufen nacheinander.
 - Security-Header (CSP ohne `unsafe-inline`, HSTS usw.) stehen in `public/_headers`. Inline-Skripte und -Styles brechen deshalb in Produktion.
+
+- Regressionsschutz für die Noten: `tests/regression/` prüft ein Raster von rund 900.000 Notenschlüsseln gegen fachliche Regeln und gegen Snapshots. Ein fehlschlagender Snapshot bedeutet, dass sich Noten geändert haben. Snapshots nur nach bewusster, fachlich geprüfter Änderung mit `npx vitest run -u` aktualisieren.
 
 ## Deployment
 
