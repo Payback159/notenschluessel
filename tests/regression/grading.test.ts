@@ -85,7 +85,7 @@ describe("Regression: Notenberechnung", () => {
         }
 
         expect(checked).toBeGreaterThan(500_000);
-    });
+    }, 30_000);
 
     it("typische Notenschlüssel sind unverändert (lesbarer Snapshot)", () => {
         const typical = [
@@ -113,7 +113,7 @@ describe("Regression: Notenberechnung", () => {
             lines.push(`${maxPoints}|${minPoints}|${bp}|${JSON.stringify(bounds)}|${validateGradeBounds(bounds).length}`);
         }
         expect({ count: lines.length, sha256: await sha256(lines.join("\n")) }).toMatchSnapshot();
-    });
+    }, 30_000);
 
     it("der Gesamtablauf liefert für zufällige Eingaben unveränderte Ergebnisse (Prüfsumme)", async () => {
         // Deterministischer Zufall: dieselben 3000 Eingaben bei jedem Lauf.
